@@ -121,7 +121,7 @@ def update_user_balance(user_id, amount):
     conn.close()
 
 # ----------------------------------------------------
-# 4. STYLISH BOT HANDLERS
+# 4. BOT HANDLERS & INTERFACE
 # ----------------------------------------------------
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -147,7 +147,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🆔 *User ID:* `{user.id}`\n"
         f"💵 *Your Balance:* `${bal:.2f}`\n\n"
         f"🚀 *Instant 24/7 Automated Card Delivery!*\n"
-        f"👇 *Select an option below to get started:* "
+        f"👇 *Select an option below to get started:*"
     )
     
     await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode="Markdown")
@@ -217,7 +217,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🛒 *━━━━━━━━━━━━━━━━━━━━*\n"
             f"🔥 *AVAILABLE CARDS BY BIN*\n"
             f"🛒 *━━━━━━━━━━━━━━━━━━━━*\n\n"
-            f"👇 *Select a card type/BIN to buy:* "
+            f"👇 *Select a card type/BIN to buy:*"
         )
         await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
@@ -249,6 +249,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             conn.close()
             return
 
+        # Fetch 1 stock card
         cursor.execute("SELECT id, card_data FROM stock WHERE product_id = ? LIMIT 1", (p_id,))
         stock_item = cursor.fetchone()
         
@@ -261,7 +262,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         s_id, card_data = stock_item
         
-        # Process Purchase
+        # ⚠️ STRICT PURCHASE PROCESS: REMOVE CARD FROM STOCK IMMEDIATELY
         cursor.execute("DELETE FROM stock WHERE id = ?", (s_id,))
         cursor.execute("UPDATE users SET balance = balance - ? WHERE user_id = ?", (p_price, user.id))
         cursor.execute("INSERT INTO history (user_id, product_name, card_data, price) VALUES (?, ?, ?, ?)",
@@ -287,7 +288,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "my_history":
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT product_name, card_data, price, timestamp FROM history WHERE user_id = ? ORDER BY id DESC LIMIT 5", (user.id,))
+        cursor.execute("SELECT product_name, card_data, price, timestamp FROM history WHERE user_id = ? ORDER BY id DESC LIMIT 10", (user.id,))
         rows = cursor.fetchall()
         conn.close()
         
@@ -298,7 +299,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
             
         msg = f"📜 *━━━━━━━━━━━━━━━━━━━━*\n"
-        msg += f"🛍️ *YOUR LAST 5 PURCHASES*\n"
+        msg += f"🛍️ *YOUR PURCHASE HISTORY*\n"
         msg += f"📜 *━━━━━━━━━━━━━━━━━━━━*\n\n"
         
         for p_name, c_data, price, ts in rows:
@@ -321,7 +322,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"⚡ *━━━━━━━━━━━━━━━━━━━━*\n\n"
             f"📥 *BULK ADD CARDS BY BIN:*\n"
             f"`/addcards <BIN> <Name> <Price>`\n"
-            f"_(Past cards line by line in the same message)_\n\n"
+            f"_(Past cards line by line in same msg)_\n\n"
+            f"🔎 *CHECK USER PURCHASE HISTORY:*\n"
+            f"`/userhistory <UserID>`\n\n"
+            f"📁 *BACKUP & DOWNLOAD:*\n"
+            f"`/downloadcards` - _All stock in TXT_\n"
+            f"`/downloaddb` - _Full Database_\n\n"
             f"🔎 *SEARCH BIN STOCK:*\n"
             f"`/searchbin <BIN>`\n\n"
             f"💰 *ADD USER BALANCE:*\n"
@@ -356,7 +362,6 @@ async def add_cards_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn = get_db()
         cursor = conn.cursor()
         
-        # Insert or update Product/BIN
         cursor.execute("INSERT OR IGNORE INTO products (bin, name, price) VALUES (?, ?, ?)", (bin_code, p_name, price))
         cursor.execute("UPDATE products SET price = ?, name = ? WHERE bin = ?", (price, p_name, bin_code))
         
@@ -382,13 +387,71 @@ async def add_cards_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "❌ *Usage Format:*\n"
             "`/addcards <BIN> <Name> <Price>`\n"
             "`CardDetails1`\n"
-            "`CardDetails2`\n\n"
-            "👉 *Example:*\n"
-            "`/addcards 403163 Visa Platinum 2.50`\n"
-            "`4031630011223344|05|28|123`\n"
-            "`4031630055667788|11|27|456`",
+            "`CardDetails2`",
             parse_mode="Markdown"
         )
+
+async def user_history_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user):
+        return
+        
+    try:
+        target_user_id = int(context.args[0])
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT product_name, card_data, price, timestamp FROM history WHERE user_id = ? ORDER BY id DESC", (target_user_id,))
+        rows = cursor.fetchall()
+        conn.close()
+        
+        if not rows:
+            await update.message.reply_text(f"⚠️ *No purchase history found for User ID:* `{target_user_id}`", parse_mode="Markdown")
+            return
+            
+        msg = f"📜 *PURCHASE HISTORY FOR USER:* `{target_user_id}`\n"
+        msg += f"📊 *Total Cards Bought:* `{len(rows)}`\n\n"
+        
+        for p_name, c_data, price, ts in rows[:15]: # Show max 15 items in text
+            msg += f"📦 *{p_name}* — `${price:.2f}`\n"
+            msg += f"💳 Card: `{c_data}`\n"
+            msg += f"📅 Date: `{ts}`\n"
+            msg += f"──────────────\n"
+            
+        await update.message.reply_text(msg, parse_mode="Markdown")
+    except Exception:
+        await update.message.reply_text("❌ *Usage:* `/userhistory <UserID>`\n*Example:* `/userhistory 123456789`", parse_mode="Markdown")
+
+async def download_cards_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user):
+        return
+        
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT p.bin, p.name, p.price, s.card_data FROM stock s JOIN products p ON s.product_id = p.id")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    if not rows:
+        await update.message.reply_text("⚠️ *No stock cards found to backup!*", parse_mode="Markdown")
+        return
+        
+    file_path = "cards_backup.txt"
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write("=== CARDS STOCK BACKUP ===\n\n")
+        for p_bin, p_name, price, card in rows:
+            f.write(f"BIN: {p_bin} | Category: {p_name} | Price: ${price:.2f} | Card: {card}\n")
+            
+    await update.message.reply_document(document=open(file_path, "rb"), caption="📦 *Here is your full stock backup file!*", parse_mode="Markdown")
+    if os.path.exists(file_path):
+        os.remove(file_path)
+
+async def download_db_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user):
+        return
+        
+    if os.path.exists(DB_NAME):
+        await update.message.reply_document(document=open(DB_NAME, "rb"), caption="💾 *Full SQLite Database File Backup!*", parse_mode="Markdown")
+    else:
+        await update.message.reply_text("❌ *Database file not found!*", parse_mode="Markdown")
 
 async def search_bin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
@@ -416,7 +479,7 @@ async def search_bin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
     except Exception:
-        await update.message.reply_text("❌ *Usage:* `/searchbin <BIN>`\n*Example:* `/searchbin 403163`", parse_mode="Markdown")
+        await update.message.reply_text("❌ *Usage:* `/searchbin <BIN>`", parse_mode="Markdown")
 
 async def add_balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
@@ -434,7 +497,7 @@ async def add_balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
     except Exception:
-        await update.message.reply_text("❌ *Usage:* `/addbalance <UserID> <Amount>`\n*Example:* `/addbalance 123456789 10.00`", parse_mode="Markdown")
+        await update.message.reply_text("❌ *Usage:* `/addbalance <UserID> <Amount>`", parse_mode="Markdown")
 
 async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
@@ -487,6 +550,9 @@ def main():
 
     # Admin Handlers
     app.add_handler(CommandHandler("addcards", add_cards_cmd))
+    app.add_handler(CommandHandler("userhistory", user_history_cmd))
+    app.add_handler(CommandHandler("downloadcards", download_cards_cmd))
+    app.add_handler(CommandHandler("downloaddb", download_db_cmd))
     app.add_handler(CommandHandler("searchbin", search_bin_cmd))
     app.add_handler(CommandHandler("addbalance", add_balance_cmd))
     app.add_handler(CommandHandler("broadcast", broadcast_cmd))
