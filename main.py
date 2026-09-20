@@ -174,7 +174,72 @@ async def is_user_joined(bot, user_id) -> bool:
         return False
     except Exception as e:
         logging.error(f"Error checking channel membership: {e}")
-        return True # Fallback if error
+        return True
+
+# Helper to generate All Commands text
+def get_commands_text(user):
+    msg = (
+        f"📖 *━━━━━━━━━━━━━━━━━━━━*\n"
+        f"📜 *ALL BOT COMMANDS GUIDE*\n"
+        f"📖 *━━━━━━━━━━━━━━━━━━━━*\n\n"
+        f"👤 *USER COMMANDS:*\n"
+        f"• `/start` — বটের মেইন মেনু চালু করতে\n"
+        f"• `/commands` — সকল কমান্ডের লিস্ট দেখতে\n"
+        f"• `/stock` — স্টকে কোন কোন BIN এর কয়টি কার্ড আছে তা দেখতে\n"
+        f"• `/balance` — আপনার বর্তমান একাউন্ট ব্যালেন্স দেখতে\n\n"
+    )
+    if is_admin(user):
+        msg += (
+            f"⚡ *ADMIN COMMANDS:*\n"
+            f"• `/addcards <BIN> <Name> <Price>` — স্টকে কার্ড আপলোড করতে\n"
+            f"• `/addbalance <UserID> <Amount>` — ইউজারের একাউন্টে ব্যালেন্স যোগ করতে\n"
+            f"• `/setbkash <Num>` — বিকাশ নম্বর সেট করতে\n"
+            f"• `/setnagad <Num>` — নগদ নম্বর সেট করতে\n"
+            f"• `/removebkash` — বিকাশ নম্বর রিমুভ করতে\n"
+            f"• `/removenagad` — নগদ নম্বর রিমুভ করতে\n"
+            f"• `/searchbin <BIN>` — কোনো নির্দিষ্ট BIN স্টক চেক করতে\n"
+            f"• `/userhistory <UserID>` — ইউজারের কেনাকাটার হিস্টোরি দেখতে\n"
+            f"• `/downloadcards` — স্টকের সব কার্ড টেক্সট ফাইলে ডাউনলোড করতে\n"
+            f"• `/downloaddb` — ডাটাবেজ ব্যাকআপ ফাইল ডাউনলোড করতে\n"
+            f"• `/broadcast <Message>` — সকল ইউজারকে নোটিশ পাঠাতে\n"
+        )
+    return msg
+
+# Helper to generate Stock text
+def get_stock_text():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT p.bin, p.name, p.price, COUNT(s.id) FROM products p LEFT JOIN stock s ON p.id = s.product_id GROUP BY p.id")
+    products = cursor.fetchall()
+    conn.close()
+
+    if not products:
+        return (
+            f"📊 *━━━━━━━━━━━━━━━━━━━━*\n"
+            f"📦 *AVAILABLE CARD STOCK STATUS*\n"
+            f"📊 *━━━━━━━━━━━━━━━━━━━━*\n\n"
+            f"⚠️ _বর্তমানে বটের স্টকে কোনো কার্ড নেই।_\n\n"
+            f"📲 *কোনো BIN এর কার্ড প্রয়োজন হলে এডমিনকে জানান:*\n"
+            f"👉 @{ADMIN_USERNAME}\n\n"
+            f"📌 *Note:* কাস্টম BIN-এর জন্য শুধুমাত্র *Visa Card* BIN গ্রহণ করা হয়।"
+        )
+
+    msg = (
+        f"📊 *━━━━━━━━━━━━━━━━━━━━*\n"
+        f"📦 *AVAILABLE CARD STOCK STATUS*\n"
+        f"📊 *━━━━━━━━━━━━━━━━━━━━*\n\n"
+    )
+    total_cards = 0
+    for idx, (p_bin, name, price, count) in enumerate(products, 1):
+        total_cards += count
+        status = f"`{count}` টি এভেলেবল" if count > 0 else "❌ Out of Stock"
+        msg += f"{idx}️⃣ *BIN:* `{p_bin}` ({name})\n"
+        msg += f"   🏷️ দাম: `${price:.2f}` | 📦 স্টক: {status}\n"
+        msg += f"──────────────\n"
+
+    msg += f"\n🔥 *মোট কার্ড স্টকে আছে:* `{total_cards}` টি\n"
+    msg += f"💡 _কার্ড কিনতে বা ট্রায়াল নিতে নিচে দেওয়া মেনু বাটন ব্যবহার করুন!_"
+    return msg
 
 # ----------------------------------------------------
 # 4. BOT HANDLERS & INTERFACE
@@ -187,6 +252,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("🛍️ Browse Cards Shop", callback_data="buy_menu")],
         [InlineKeyboardButton("🎁 Free Trial (2 Cards)", callback_data="claim_trial")],
+        [InlineKeyboardButton("📊 Available Stock", callback_data="view_stock"), InlineKeyboardButton("📜 All Commands", callback_data="all_commands")],
         [InlineKeyboardButton("💰 My Balance", callback_data="my_balance"), InlineKeyboardButton("📜 Purchase History", callback_data="my_history")],
         [InlineKeyboardButton("📢 Telegram Channel", url=CHANNEL_URL)],
         [InlineKeyboardButton("👨‍💻 Contact Admin", url=f"https://t.me/{ADMIN_USERNAME}")]
@@ -210,6 +276,27 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode="Markdown")
 
+async def commands_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    msg = get_commands_text(user)
+    keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]]
+    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+async def stock_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = get_stock_text()
+    keyboard = [
+        [InlineKeyboardButton("🛍️ Go To Shop", callback_data="buy_menu")],
+        [InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]
+    ]
+    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    bal = get_user_balance(user.id)
+    msg = f"💵 *Your Current Balance:* `${bal:.2f}`\n\n_To top up, contact Admin: @{ADMIN_USERNAME}_"
+    keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]]
+    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -221,6 +308,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [InlineKeyboardButton("🛍️ Browse Cards Shop", callback_data="buy_menu")],
             [InlineKeyboardButton("🎁 Free Trial (2 Cards)", callback_data="claim_trial")],
+            [InlineKeyboardButton("📊 Available Stock", callback_data="view_stock"), InlineKeyboardButton("📜 All Commands", callback_data="all_commands")],
             [InlineKeyboardButton("💰 My Balance", callback_data="my_balance"), InlineKeyboardButton("📜 Purchase History", callback_data="my_history")],
             [InlineKeyboardButton("📢 Telegram Channel", url=CHANNEL_URL)],
             [InlineKeyboardButton("👨‍💻 Contact Admin", url=f"https://t.me/{ADMIN_USERNAME}")]
@@ -240,8 +328,20 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await query.edit_message_text(welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
+    elif data == "all_commands":
+        msg = get_commands_text(user)
+        keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]]
+        await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+    elif data == "view_stock":
+        msg = get_stock_text()
+        keyboard = [
+            [InlineKeyboardButton("🛍️ Go To Shop", callback_data="buy_menu")],
+            [InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]
+        ]
+        await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
     elif data == "claim_trial":
-        # Force Join Check
         joined = await is_user_joined(context.bot, user.id)
         if not joined:
             msg = (
@@ -482,7 +582,6 @@ async def text_message_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     if context.user_data.get("awaiting_trial_bin"):
         context.user_data["awaiting_trial_bin"] = False
         
-        # Double check channel membership
         joined = await is_user_joined(context.bot, user.id)
         if not joined:
             msg = (
@@ -812,6 +911,9 @@ def main():
 
     # User Handlers
     app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("commands", commands_command))
+    app.add_handler(CommandHandler("stock", stock_command))
+    app.add_handler(CommandHandler("balance", balance_command))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_message_handler))
 
