@@ -20,9 +20,15 @@ ADMIN_USERNAME = "Trusted_zone_1122"
 CHANNEL_USERNAME = "@help_centre_1122"
 CHANNEL_URL = "https://t.me/help_centre_1122"
 
+# Logging config
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+)
+
 
 # ----------------------------------------------------
-# 1. DUMMY HTTP SERVER (For Render Free Tier)
+# 1. DUMMY HTTP SERVER (For 24/7 Hosting like Render)
 # ----------------------------------------------------
 class DummyHTTPHandler(BaseHTTPRequestHandler):
 
@@ -77,7 +83,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             product_id INTEGER,
             card_data TEXT NOT NULL,
-            FOREIGN KEY (product_id) REFERENCES products(id)
+            FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
         )
     """)
 
@@ -217,31 +223,30 @@ def get_commands_text(user):
       f"📜 *ALL BOT COMMANDS GUIDE*\n"
       f"📖 *━━━━━━━━━━━━━━━━━━━━*\n\n"
       f"👤 *USER COMMANDS:*\n"
-      f"• `/start` — বটের মেইন মেনু চালু করতে\n"
-      f"• `/buy` — দোকান খুলতে ও কার্ড কেনার লিস্ট দেখতে\n"
-      f"• `/buycard <BIN>` — ১টি নির্দিষ্ট BIN এর কার্ড কিনতে (যেমন: `/buycard"
-      f" 416598`)\n"
-      f"• `/buycards <BIN> <সংখ্যার>` — নির্দিষ্ট BIN এর একাধিক কার্ড একসাথে"
-      f" কিনতে (যেমন: `/buycards 416598 5`)\n"
-      f"• `/stock` — স্টকে কোন কোন BIN এর কয়টি কার্ড আছে তা দেখতে\n"
-      f"• `/balance` — আপনার বর্তমান ব্যালেন্স দেখতে\n"
-      f"• `/commands` — সকল কমান্ডের লিস্ট দেখতে\n\n"
+      f"• `/start` — বটের মেইন মেনু ওপেন করতে\n"
+      f"• `/buy` — শপ লিস্ট ও কার্ড কেনার ইন্টারফেস\n"
+      f"• `/buycard <BIN>` — ১টি কার্ড কিনতে\n"
+      f"• `/buycards <BIN> <Qty>` — একাধিক কার্ড কিনতে\n"
+      f"• `/stock` — স্টকে কতগুলো কার্ড আছে দেখতে\n"
+      f"• `/balance` — আপনার ব্যালেন্স ও রিচার্জ ইনফো দেখতে\n"
+      f"• `/commands` — হেল্প গাইড দেখতে\n\n"
   )
   if is_admin(user):
     msg += (
         f"⚡ *ADMIN COMMANDS:*\n"
-        f"• `/addcards <BIN> <Name> <Price>` — কার্ড আপলোড করতে\n"
-        f"• `/removecards <BIN>` — কোনো BIN এর সব কার্ড রিমুভ/ডিলিট করতে\n"
-        f"• `/addbalance <UserID> <Amount>` — ইউজারকে ব্যালেন্স যোগ করতে\n"
+        f"• `/addcards <BIN> <Name> <Price>` — (ফাইলের রিপ্লাই দিয়ে কার্ড যোগ"
+        f" করতে)\n"
+        f"• `/removecards <BIN>` — কোনো BIN ডিলিট করতে\n"
+        f"• `/addbalance <UserID> <Amount>` — ইউজারের ব্যালেন্স যোগ করতে\n"
         f"• `/setbkash <Num>` — বিকাশ নম্বর সেট করতে\n"
         f"• `/setnagad <Num>` — নগদ নম্বর সেট করতে\n"
-        f"• `/removebkash` — বিকাশ নম্বর রিমুভ করতে\n"
-        f"• `/removenagad` — নগদ নম্বর রিমুভ করতে\n"
-        f"• `/searchbin <BIN>` — নির্দিষ্ট BIN স্টক চেক করতে\n"
-        f"• `/userhistory <UserID>` — ইউজারের হিস্টোরি দেখতে\n"
-        f"• `/downloadcards` — স্টকের ব্যাকআপ ফাইল ডাউনলোড করতে\n"
-        f"• `/downloaddb` — ডাটাবেজ ব্যাকআপ ডাউনলোড করতে\n"
-        f"• `/broadcast <Message>` — ব্রডকাস্ট নোটিশ পাঠাতে\n"
+        f"• `/removebkash` — বিকাশ নম্বর ডিলিট করতে\n"
+        f"• `/removenagad` — নগদ নম্বর ডিলিট করতে\n"
+        f"• `/searchbin <BIN>` — BIN সার্চ করতে\n"
+        f"• `/userhistory <UserID>` — ইউজার কেনাকাটার ইতিহাস\n"
+        f"• `/downloadcards` — স্টকের ব্যাকআপ ফাইল পেতে\n"
+        f"• `/downloaddb` — ডাটাবেজ ডাউনলোড করতে\n"
+        f"• `/broadcast <Message>` — সবাইকে মেসেজ পাঠাতে\n"
     )
   return msg
 
@@ -262,9 +267,7 @@ def get_stock_text():
         f"📦 *AVAILABLE CARD STOCK STATUS*\n"
         f"📊 *━━━━━━━━━━━━━━━━━━━━*\n\n"
         f"⚠️ _বর্তমানে বটের স্টকে কোনো কার্ড নেই।_\n\n"
-        f"📲 *কোনো BIN এর কার্ড প্রয়োজন হলে এডমিনকে জানান:*\n"
-        f"👉 @{ADMIN_USERNAME}\n\n"
-        f"📌 *Note:* কাস্টম BIN-এর জন্য শুধুমাত্র *Visa Card* BIN গ্রহণ করা হয়।"
+        f"📲 *যোগাযোগ করুন:* @{ADMIN_USERNAME}\n"
     )
 
   msg = (
@@ -277,16 +280,16 @@ def get_stock_text():
     total_cards += count
     status = f"`{count}` টি এভেলেবল" if count > 0 else "❌ Out of Stock"
     msg += f"{idx}️⃣ *BIN:* `{p_bin}` ({name})\n"
-    msg += f"   🏷️ দাম: `${price:.2f}` | 📦 স্টক: {status}\n"
+    msg += f"   🏷️ দাম: `৳{price:.2f}` | 📦 স্টক: {status}\n"
     msg += f"──────────────\n"
 
   msg += f"\n🔥 *মোট কার্ড স্টকে আছে:* `{total_cards}` টি\n"
-  msg += f"💡 _কার্ড কিনতে নিচে 🛍️ Browse Cards Shop অপশনে চাপুন।_"
+  msg += f"💡 _কার্ড কিনতে 🛍️ Browse Cards Shop অপশনটি চাপুন।_"
   return msg
 
 
 # ----------------------------------------------------
-# 4. BOT HANDLERS & INTERFACE
+# 4. BOT MAIN COMMANDS
 # ----------------------------------------------------
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
   user = update.effective_user
@@ -339,9 +342,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
       f"✨ *━━━━━━━━━━━━━━━━━━━━*\n\n"
       f"👋 *Welcome,* `{user.first_name}`!\n"
       f"🆔 *User ID:* `{user.id}`\n"
-      f"💵 *Your Balance:* `${bal:.2f}`\n\n"
-      f"🚀 *Instant 24/7 Automated Card Delivery!*\n"
-      f"👇 *Select an option below to get started:*"
+      f"💵 *Your Balance:* `৳{bal:.2f}`\n\n"
+      f"🚀 *Instant Automated Delivery 24/7!*\n"
+      f"👇 *নিচের অপশন থেকে বেছে নিন:*"
   )
 
   await update.message.reply_text(
@@ -374,9 +377,24 @@ async def stock_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
   user = update.effective_user
   bal = get_user_balance(user.id)
+  bkash_num = get_setting("bkash")
+  nagad_num = get_setting("nagad")
+
+  payment_info = ""
+  if bkash_num or nagad_num:
+    payment_info += "\n\n📲 *PAYMENT METHODS (TOP-UP):*\n"
+    if bkash_num:
+      payment_info += f"🌸 *bKash (Personal):* `{bkash_num}`\n"
+    if nagad_num:
+      payment_info += f"🟠 *Nagad (Personal):* `{nagad_num}`\n"
+    payment_info += (
+        "\n⚠️ _টাকা পাঠানোর পর Transaction ID ও আপনার User ID সহ এডমিনকে"
+        " জানান।_\n"
+    )
+
   msg = (
-      f"💵 *Your Current Balance:* `${bal:.2f}`\n\n_To top up, contact Admin:"
-      f" @{ADMIN_USERNAME}_"
+      f"💵 *Your Current Balance:* `৳{bal:.2f}`{payment_info}\n👨‍💻 *Admin:*"
+      f" @{ADMIN_USERNAME}"
   )
   keyboard = [
       [InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]
@@ -387,7 +405,7 @@ async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ----------------------------------------------------
-# 5. DIRECT BUY COMMANDS
+# 5. SHOP & CARD PURCHASE ENGINE
 # ----------------------------------------------------
 async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
   conn = get_db()
@@ -400,14 +418,15 @@ async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
   conn.close()
 
   if not products:
-    msg = "⚠️ *STORE IS CURRENTLY EMPTY!*"
-    await update.message.reply_text(msg, parse_mode="Markdown")
+    await update.message.reply_text(
+        "⚠️ *বর্তমানে শপ সম্পূর্ণ খালি!*", parse_mode="Markdown"
+    )
     return
 
   keyboard = []
   for p_id, p_bin, name, price, stock_count in products:
     btn_text = (
-        f"💳 Buy {p_bin} - ${price:.2f} ({stock_count} Available)"
+        f"🛒 Buy {p_bin} ({name}) — ৳{price:.2f} [{stock_count} Stock]"
         if stock_count > 0
         else f"❌ {p_bin} - Out of Stock"
     )
@@ -422,7 +441,7 @@ async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
       f"🛒 *━━━━━━━━━━━━━━━━━━━━*\n"
       f"🔥 *AVAILABLE CARDS STORE*\n"
       f"🛒 *━━━━━━━━━━━━━━━━━━━━*\n\n"
-      f"👇 *যে কার্ডটি কিনতে চান সেটির ওপর ক্লিক করুন:*"
+      f"👇 *যে কার্ডটি কিনতে চান সেটির ওপর সিলেক্ট করুন:*"
   )
   await update.message.reply_text(
       msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown"
@@ -435,7 +454,7 @@ async def buycard_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
   if not context.args:
     await update.message.reply_text(
-        "❌ *নিয়ম:* `/buycard <BIN>`\n_উদাহরণ:_ `/buycard 416598`",
+        "❌ *সঠিক নিয়ম:* `/buycard <BIN>`\n_যেমন:_ `/buycard 416598`",
         parse_mode="Markdown",
     )
     return
@@ -450,7 +469,8 @@ async def buycards_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
   if len(context.args) < 2:
     await update.message.reply_text(
-        "❌ *নিয়ম:* `/buycards <BIN> <Quantity>`\n_উদাহরণ:_ `/buycards 416598 5`",
+        "❌ *সঠিক নিয়ম:* `/buycards <BIN> <Quantity>`\n_যেমন:_ `/buycards"
+        " 416598 5`",
         parse_mode="Markdown",
     )
     return
@@ -462,7 +482,7 @@ async def buycards_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
       raise ValueError
   except ValueError:
     await update.message.reply_text(
-        "❌ *ভুল পরিমাণ!* সংখ্যা সঠিকভাবে দিন।", parse_mode="Markdown"
+        "❌ *ভুল সংখ্যা দেওয়া হয়েছে!*", parse_mode="Markdown"
     )
     return
 
@@ -492,9 +512,7 @@ async def process_card_purchase(
       )
 
   if not prod:
-    await send_msg(
-        f"❌ *BIN `{target_bin}` বটের স্টকে খুঁজে পাওয়া যায়নি!*"
-    )
+    await send_msg(f"❌ *BIN `{target_bin}` স্টকে খুঁজে পাওয়া যায়নি!*")
     conn.close()
     return
 
@@ -509,9 +527,9 @@ async def process_card_purchase(
     await send_msg(
         f"❌ *পর্যাপ্ত ব্যালেন্স নেই!*\n\n"
         f"💳 *BIN:* `{target_bin}`\n"
-        f"📦 *কার্ড সংখ্যা:* `{quantity}` টি\n"
-        f"🏷️ *মোট খরচ:* `${total_cost:.2f}`\n"
-        f"💵 *আপনার ব্যালেন্স:* `${user_bal:.2f}`\n\n"
+        f"📦 *পরিমাণ:* `{quantity}` টি\n"
+        f"🏷️ *মোট লাগবে:* `৳{total_cost:.2f}`\n"
+        f"💵 *আপনার ব্যালেন্স:* `৳{user_bal:.2f}`\n\n"
         f"📲 *এডমিন থেকে ব্যালেন্স রিচার্জ করুন:* @{ADMIN_USERNAME}",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
@@ -526,9 +544,8 @@ async def process_card_purchase(
 
   if len(stock_items) < quantity:
     await send_msg(
-        f"❌ *স্টক কম আছে!*\n\n`{target_bin}` BIN-এ বর্তমানে"
-        f" `{len(stock_items)}` টি কার্ড স্টকে আছে। আপনি রিকোয়েস্ট করেছেন"
-        f" `{quantity}` টি।"
+        f"❌ *স্টক কম আছে!*\n\n`{target_bin}` BIN-এ রয়েছে `{len(stock_items)}`"
+        f" টি কার্ড। আপনার প্রয়োজন `{quantity}` টি।"
     )
     conn.close()
     return
@@ -540,12 +557,7 @@ async def process_card_purchase(
     cursor.execute(
         "INSERT INTO history (user_id, product_name, card_data, price) VALUES"
         " (?, ?, ?, ?)",
-        (
-            user.id,
-            f"{p_name} (BIN: {target_bin})",
-            card_data,
-            p_price,
-        ),
+        (user.id, f"{p_name} (BIN: {target_bin})", card_data, p_price),
     )
 
   cursor.execute(
@@ -567,17 +579,17 @@ async def process_card_purchase(
       f"📦 *Item:* `{p_name}`\n"
       f"💳 *BIN:* `{target_bin}`\n"
       f"📊 *Quantity:* `{quantity}` টি\n"
-      f"💵 *Total Paid:* `${total_cost:.2f}`\n\n"
+      f"💵 *Total Paid:* `৳{total_cost:.2f}`\n\n"
       f"🔑 *YOUR CARDS DETAILS:*\n"
       f"{cards_text}\n\n"
-      f"⚡ _Tap on the card details to copy!_\n"
-      f"❤️ *Thank you for shopping!*"
+      f"⚡ _কপি করার জন্য কার্ডের ওপর আলতো চাপুন!_\n"
+      f"❤️ *আমাদের সাথে থাকার জন্য ধন্যবাদ!*"
   )
   await send_msg(msg, reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 # ----------------------------------------------------
-# 6. BUTTON HANDLERS
+# 6. CALLBACK QUERY BUTTON HANDLERS
 # ----------------------------------------------------
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
   query = update.callback_query
@@ -630,9 +642,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"✨ *━━━━━━━━━━━━━━━━━━━━*\n\n"
         f"👋 *Welcome,* `{user.first_name}`!\n"
         f"🆔 *User ID:* `{user.id}`\n"
-        f"💵 *Your Balance:* `${bal:.2f}`\n\n"
-        f"🚀 *Instant 24/7 Automated Card Delivery!*\n"
-        f"👇 *Select an option below to get started:*"
+        f"💵 *Your Balance:* `৳{bal:.2f}`\n\n"
+        f"🚀 *Instant Automated Delivery 24/7!*\n"
+        f"👇 *নিচের অপশন থেকে আপনার পছন্দের অপশনটি বেছে নিন:*"
     )
     await query.edit_message_text(
         welcome_text,
@@ -673,7 +685,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn.close()
 
     if not products:
-      msg = "⚠️ *STORE IS CURRENTLY EMPTY!*"
+      msg = "⚠️ *বর্তমানে স্টকে কোনো প্রোডাক্ট পাওয়া যায়নি!*"
       keyboard = [
           [InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]
       ]
@@ -685,7 +697,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = []
     for p_id, p_bin, name, price, stock_count in products:
       if stock_count > 0:
-        btn_text = f"🛒 Buy {p_bin} ({name}) — ${price:.2f} [{stock_count} Stock]"
+        btn_text = f"🛒 Buy {p_bin} ({name}) — ৳{price:.2f} [{stock_count} Stock]"
         cb_data = f"buy_prod_{p_id}"
       else:
         btn_text = f"❌ {p_bin} ({name}) — Out of Stock"
@@ -724,8 +736,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not joined:
       msg = (
           f"⚠️ *MUST JOIN OUR TELEGRAM CHANNEL!*\n\n"
-          f"ফ্রি ট্রায়াল ক্লেইম করতে হলে আপনাকে অবশ্যই আমাদের সিগন্যাল চ্যানেলে"
-          f" জয়েন থাকতে হবে।"
+          f"ফ্রি ট্রায়াল নেওয়ার জন্য আপনাকে অবশ্যই চ্যানেলটিতে জয়েন করতে হবে।"
       )
       keyboard = [
           [InlineKeyboardButton("📢 Join Telegram Channel", url=CHANNEL_URL)],
@@ -749,8 +760,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if has_claimed_trial(user.id):
       msg = (
-          "❌ *TRIAL ALREADY CLAIMED!*\n\n_You have already used your 1-time Free"
-          " Trial. Please buy cards from the shop!_"
+          "❌ *TRIAL ALREADY CLAIMED!*\n\n_আপনি ইতোমধ্যেই ১-বারের ফ্রি ট্রায়াল"
+          " ব্যবহার করেছেন। পরবর্তীতে কিনতে চাইলে শপ ব্যবহার করুন।_"
       )
       keyboard = [
           [InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]
@@ -767,8 +778,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🎁 *━━━━━━━━━━━━━━━━━━━━*\n"
         f"🔍 *ENTER BIN FOR FREE TRIAL*\n"
         f"🎁 *━━━━━━━━━━━━━━━━━━━━*\n\n"
-        f"আপনি যে BIN-এর ২টি ফ্রি ট্রায়াল কার্ড চান, সেই **6-Digit BIN** টি"
-        f" এখানে মেসেজে লিখে পাঠান。\n\n"
+        f"আপনি যে BIN থেকে **২টি কার্ড** ফ্রি ট্রায়াল নিতে চান, সেটির **6-Digit"
+        f" BIN** লিখে পাঠান।\n\n"
         f"💡 *Example:* `416598`"
     )
     keyboard = [
@@ -791,11 +802,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
       if nagad_num:
         payment_info += f"🟠 *Nagad (Personal):* `{nagad_num}`\n"
       payment_info += (
-          "\n⚠️ _টাকা পাঠানোর পর ট্রানজেকশন স্ক্রিনশট ও আপনার User ID সহ"
-          " এডমিনকে পাঠান।_\n"
+          "\n⚠️ _টাকা পাঠানোর পর Transaction ID ও আপনার User ID সহ এডমিনকে"
+          " জানান।_\n"
       )
-    else:
-      payment_info += "\n💡 *To top-up your balance, contact Admin directly.*"
 
     msg = (
         f"💳 *━━━━━━━━━━━━━━━━━━━━*\n"
@@ -803,7 +812,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💳 *━━━━━━━━━━━━━━━━━━━━*\n\n"
         f"👤 *User:* `{user.first_name}`\n"
         f"🆔 *User ID:* `{user.id}`\n"
-        f"💎 *Current Balance:* `${bal:.2f}`\n"
+        f"💎 *Current Balance:* `৳{bal:.2f}`\n"
         f"{payment_info}\n"
         f"👨‍💻 *Admin:* @{ADMIN_USERNAME}"
     )
@@ -826,7 +835,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn.close()
 
     if not rows:
-      msg = "📜 *PURCHASE HISTORY*\n\n_You haven't bought any cards yet!_"
+      msg = "📜 *PURCHASE HISTORY*\n\n_আপনি এখনও কোনো কার্ড কেনেননি!_"
       keyboard = [
           [InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]
       ]
@@ -839,7 +848,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     msg = f"📜 *YOUR PURCHASE HISTORY*\n\n"
     for p_name, c_data, price, ts in rows:
-      msg += f"📦 *{p_name}* — `${price:.2f}`\n"
+      msg += f"📦 *{p_name}* — `৳{price:.2f}`\n"
       msg += f"💳 Details: `{c_data}`\n"
       msg += f"📅 Date: `{ts}`\n"
       msg += f"──────────────\n"
@@ -853,15 +862,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
   elif data == "admin_panel":
     if not is_admin(user):
-      await query.edit_message_text(
-          "🚫 *Unauthorized Access!*", parse_mode="Markdown"
-      )
       return
 
     msg = (
         f"⚡ *ADMIN CONTROL PANEL*\n\n"
         f"👉 `/addcards <BIN> <Name> <Price>`\n"
-        f"👉 `/removecards <BIN>` (স্টক রিমুভ)\n"
+        f"_(ফাইল বা টেক্সট মেসেজের ওপর Reply দিন)_\n"
+        f"👉 `/removecards <BIN>`\n"
         f"👉 `/addbalance <UserID> <Amount>`\n"
         f"👉 `/setbkash <Num>` | `/setnagad <Num>`\n"
         f"👉 `/userhistory <UserID>`\n"
@@ -876,7 +883,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ----------------------------------------------------
-# 7. TEXT MESSAGE HANDLER (FOR TRIAL BIN)
+# 7. TEXT HANDLER (FREE TRIAL SYSTEM FROM MAIN STOCK)
 # ----------------------------------------------------
 async def text_message_handler(
     update: Update, context: ContextTypes.DEFAULT_TYPE
@@ -888,6 +895,13 @@ async def text_message_handler(
     context.user_data["awaiting_trial_bin"] = False
     input_bin = text.split()[0]
 
+    if has_claimed_trial(user.id):
+      await update.message.reply_text(
+          "❌ *আপনি ইতোমধ্যেই ১-বারের ফ্রি ট্রায়াল ২টা কার্ড ক্লেইম করেছেন!*",
+          parse_mode="Markdown",
+      )
+      return
+
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
@@ -897,7 +911,7 @@ async def text_message_handler(
 
     if not prod:
       await update.message.reply_text(
-          f"❌ *BIN `{input_bin}` স্টকে পাওয়া যায়নি।*", parse_mode="Markdown"
+          f"❌ *BIN `{input_bin}` স্টকে পাওয়া যায়নি!*", parse_mode="Markdown"
       )
       conn.close()
       return
@@ -910,7 +924,8 @@ async def text_message_handler(
 
     if len(stock_items) < 2:
       await update.message.reply_text(
-          f"⚠️ `{input_bin}` BIN-এ ট্রায়ালের জন্য যথেষ্ট কার্ড নেই।",
+          f"⚠️ `{input_bin}` BIN-এ ফ্রি ট্রায়াল দেওয়ার মতো পর্যাপ্ত (২টা) কার্ড"
+          " স্টকে নেই।",
           parse_mode="Markdown",
       )
       conn.close()
@@ -930,17 +945,102 @@ async def text_message_handler(
     conn.commit()
     conn.close()
 
+    cards_formatted = "\n".join([f"`{c}`" for c in card_texts])
+
     msg = (
-        f"🎉 *FREE TRIAL CLAIMED!*\n\n"
-        f"1️⃣ `{card_texts[0]}`\n"
-        f"2️⃣ `{card_texts[1]}`"
+        f"🎉 *━━━━━━━━━━━━━━━━━━━━*\n"
+        f"🎁 *FREE TRIAL CLAIMED SUCCESS!*\n"
+        f"🎉 *━━━━━━━━━━━━━━━━━━━━*\n\n"
+        f"📦 *Item:* `{p_name}`\n"
+        f"💳 *BIN:* `{input_bin}`\n"
+        f"📊 *Quantity:* `2` টি (মেইন স্টক থেকে কমেছে)\n\n"
+        f"🔑 *YOUR FREE CARDS:*\n"
+        f"{cards_formatted}\n\n"
+        f"⚠️ _নোট: আপনি সফলভাবে ১-বারের ফ্রি ট্রায়াল ২টা কার্ড পেয়েছেন।_"
     )
-    await update.message.reply_text(msg, parse_mode="Markdown")
+    keyboard = [
+        [InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]
+    ]
+    await update.message.reply_text(
+        msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown"
+    )
 
 
 # ----------------------------------------------------
-# 8. ADMIN COMMAND HANDLERS
+# 8. ADMIN COMMANDS (SUPPORT FILE REPLY & TXT)
 # ----------------------------------------------------
+async def add_cards_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+  if not is_admin(update.effective_user):
+    return
+
+  reply_msg = update.message.reply_to_message
+  cards = []
+
+  # ১. যদি কোনো ফাইল বা টেক্সটের Reply হিসেবে কমান্ড দেওয়া হয়
+  if reply_msg:
+    if reply_msg.document:  # ফাইলের ওপর রিপ্লাই দিলে
+      file = await context.bot.get_file(reply_msg.document.file_id)
+      file_bytes = await file.download_as_bytearray()
+      content = file_bytes.decode("utf-8", errors="ignore")
+      cards = [line.strip() for line in content.split("\n") if line.strip()]
+    elif reply_msg.text:  # মেসেজের ওপর রিপ্লাই দিলে
+      cards = [
+          line.strip() for line in reply_msg.text.split("\n") if line.strip()
+      ]
+  else:
+    # ২. যদি এক মেসেজেই নিচে নিচে কার্ড দিয়ে কমান্ড পাঠানো হয়
+    text_lines = update.message.text.split("\n")
+    cards = [line.strip() for line in text_lines[1:] if line.strip()]
+
+  try:
+    cmd_parts = update.message.text.split("\n")[0].split()
+    bin_code = cmd_parts[1]
+    price = float(cmd_parts[-1])
+    p_name = (
+        " ".join(cmd_parts[2:-1]) if len(cmd_parts) > 3 else f"BIN {bin_code}"
+    )
+
+    if not cards:
+      await update.message.reply_text(
+          "❌ *কোনো কার্ড ড্যাটা খুঁজে পাওয়া যায়নি!*\n"
+          "_ফাইলের রিপ্লাই দিয়ে সঠিকভাবে `/addcards <BIN> <Name> <Price>` লিখুন।_",
+          parse_mode="Markdown",
+      )
+      return
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT OR IGNORE INTO products (bin, name, price) VALUES (?, ?, ?)",
+        (bin_code, p_name, price),
+    )
+    cursor.execute(
+        "UPDATE products SET price = ?, name = ? WHERE bin = ?",
+        (price, p_name, bin_code),
+    )
+    cursor.execute("SELECT id FROM products WHERE bin = ?", (bin_code,))
+    p_id = cursor.fetchone()[0]
+
+    for c in cards:
+      cursor.execute(
+          "INSERT INTO stock (product_id, card_data) VALUES (?, ?)", (p_id, c)
+      )
+
+    conn.commit()
+    conn.close()
+    await update.message.reply_text(
+        f"🎉 *BIN `{bin_code}` ({p_name}) এর জন্য সফলভাবে `{len(cards)}` টি কার্ড"
+        f" যোগ হয়েছে!*\n🏷️ দাম: `৳{price:.2f}`",
+        parse_mode="Markdown",
+    )
+  except Exception as e:
+    await update.message.reply_text(
+        "❌ *সঠিক নিয়ম:*\n1. আগে ফাইল/কার্ড পাঠান\n2. সেটির **Reply** দিয়ে লিখুন:"
+        " `/addcards 416598 Visa 50.50`",
+        parse_mode="Markdown",
+    )
+
+
 async def remove_cards_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
   if not is_admin(update.effective_user):
     return
@@ -970,10 +1070,26 @@ async def remove_cards_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
   conn.close()
 
   await update.message.reply_text(
-      f"🗑️ *BIN `{bin_code}` এর সমস্ত কার্ড স্টক এবং ক্যাটাগরি সফলভাবে মুছে"
-      " ফেলা হয়েছে!*",
+      f"🗑️ *BIN `{bin_code}` এর সকল ডাটা ও স্টক রিমুভ হয়েছে!*",
       parse_mode="Markdown",
   )
+
+
+async def add_balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+  if not is_admin(update.effective_user):
+    return
+  try:
+    t_id = int(context.args[0])
+    amt = float(context.args[1])
+    update_user_balance(t_id, amt)
+    await update.message.reply_text(
+        f"✅ *ব্যালেন্স আপডেট সফল!*\n👤 User ID: `{t_id}`\n💵 Added: `৳{amt:.2f}`",
+        parse_mode="Markdown",
+    )
+  except:
+    await update.message.reply_text(
+        "❌ `/addbalance <UserID> <Amount>`", parse_mode="Markdown"
+    )
 
 
 async def set_bkash_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -982,7 +1098,8 @@ async def set_bkash_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
   try:
     set_setting("bkash", context.args[0])
     await update.message.reply_text(
-        f"✅ *bKash Updated:* `{context.args[0]}`", parse_mode="Markdown"
+        f"✅ *bKash নম্বর সেট করা হয়েছে:* `{context.args[0]}`",
+        parse_mode="Markdown",
     )
   except:
     await update.message.reply_text(
@@ -994,7 +1111,9 @@ async def remove_bkash_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
   if not is_admin(update.effective_user):
     return
   set_setting("bkash", None)
-  await update.message.reply_text("🗑️ *bKash Removed!*", parse_mode="Markdown")
+  await update.message.reply_text(
+      "🗑️ *bKash নম্বর রিমুভ করা হয়েছে!*", parse_mode="Markdown"
+  )
 
 
 async def set_nagad_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1003,7 +1122,8 @@ async def set_nagad_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
   try:
     set_setting("nagad", context.args[0])
     await update.message.reply_text(
-        f"✅ *Nagad Updated:* `{context.args[0]}`", parse_mode="Markdown"
+        f"✅ *Nagad নম্বর সেট করা হয়েছে:* `{context.args[0]}`",
+        parse_mode="Markdown",
     )
   except:
     await update.message.reply_text(
@@ -1015,60 +1135,9 @@ async def remove_nagad_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
   if not is_admin(update.effective_user):
     return
   set_setting("nagad", None)
-  await update.message.reply_text("🗑️ *Nagad Removed!*", parse_mode="Markdown")
-
-
-async def add_cards_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-  if not is_admin(update.effective_user):
-    return
-  try:
-    text_lines = update.message.text.split("\n")
-    first_line_parts = text_lines[0].split()
-
-    bin_code = first_line_parts[1]
-    price = float(first_line_parts[-1])
-    p_name = (
-        " ".join(first_line_parts[2:-1])
-        if len(first_line_parts) > 3
-        else f"BIN {bin_code}"
-    )
-    cards = [line.strip() for line in text_lines[1:] if line.strip()]
-
-    if not cards:
-      await update.message.reply_text(
-          "❌ *No cards added.*", parse_mode="Markdown"
-      )
-      return
-
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT OR IGNORE INTO products (bin, name, price) VALUES (?, ?, ?)",
-        (bin_code, p_name, price),
-    )
-    cursor.execute(
-        "UPDATE products SET price = ?, name = ? WHERE bin = ?",
-        (price, p_name, bin_code),
-    )
-    cursor.execute("SELECT id FROM products WHERE bin = ?", (bin_code,))
-    p_id = cursor.fetchone()[0]
-
-    for c in cards:
-      cursor.execute(
-          "INSERT INTO stock (product_id, card_data) VALUES (?, ?)", (p_id, c)
-      )
-
-    conn.commit()
-    conn.close()
-    await update.message.reply_text(
-        f"🎉 *ADDED {len(cards)} CARDS FOR BIN `{bin_code}`!*",
-        parse_mode="Markdown",
-    )
-  except Exception as e:
-    await update.message.reply_text(
-        "❌ *Format:* `/addcards <BIN> <Name> <Price>`\n`CardData1`",
-        parse_mode="Markdown",
-    )
+  await update.message.reply_text(
+      "🗑️ *Nagad নম্বর রিমুভ করা হয়েছে!*", parse_mode="Markdown"
+  )
 
 
 async def user_history_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1088,14 +1157,14 @@ async def user_history_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not rows:
       await update.message.reply_text(
-          "⚠️ No history found.", parse_mode="Markdown"
+          "⚠️ এই ইউজারের কোনো হিস্ট্রি পাওয়া যায়নি।", parse_mode="Markdown"
       )
       return
 
     msg = f"📜 *HISTORY FOR USER:* `{t_id}`\n\n"
     for p_name, c_data, price, ts in rows[:15]:
       msg += (
-          f"📦 *{p_name}* — `${price:.2f}`\n`{c_data}`\n📅"
+          f"📦 *{p_name}* — `৳{price:.2f}`\n`{c_data}`\n📅"
           f" `{ts}`\n──────────────\n"
       )
     await update.message.reply_text(msg, parse_mode="Markdown")
@@ -1120,17 +1189,19 @@ async def download_cards_cmd(
   conn.close()
 
   if not rows:
-    await update.message.reply_text("⚠️ No stock.", parse_mode="Markdown")
+    await update.message.reply_text(
+        "⚠️ স্টকে কোনো কার্ড নেই।", parse_mode="Markdown"
+    )
     return
 
   file_path = "cards_backup.txt"
   with open(file_path, "w", encoding="utf-8") as f:
     for p_bin, p_name, price, card in rows:
-      f.write(f"BIN: {p_bin} | {p_name} | ${price:.2f} | Card: {card}\n")
+      f.write(f"BIN: {p_bin} | {p_name} | ৳{price:.2f} | Card: {card}\n")
 
   await update.message.reply_document(
       document=open(file_path, "rb"),
-      caption="📦 *Stock Backup*",
+      caption="📦 *Stock Backup File*",
       parse_mode="Markdown",
   )
   if os.path.exists(file_path):
@@ -1143,7 +1214,7 @@ async def download_db_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
   if os.path.exists(DB_NAME):
     await update.message.reply_document(
         document=open(DB_NAME, "rb"),
-        caption="💾 *Database Backup*",
+        caption="💾 *SQLite Database Backup*",
         parse_mode="Markdown",
     )
 
@@ -1165,36 +1236,19 @@ async def search_bin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not res:
       await update.message.reply_text(
-          f"❌ BIN `{bin_code}` not found.", parse_mode="Markdown"
+          f"❌ BIN `{bin_code}` খুঁজে পাওয়া যায়নি।", parse_mode="Markdown"
       )
       return
 
     name, price, stock = res
     await update.message.reply_text(
-        f"🔎 *BIN:* `{bin_code}`\n📦 *Name:* `{name}`\n💵 *Price:*"
-        f" `${price:.2f}`\n📊 *Stock:* `{stock}`",
+        f"🔎 *BIN Info:*\n💳 BIN: `{bin_code}`\n📦 Name: `{name}`\n🏷️ Price:"
+        f" `৳{price:.2f}`\n📊 Available Stock: `{stock}`",
         parse_mode="Markdown",
     )
   except:
     await update.message.reply_text(
         "❌ `/searchbin <BIN>`", parse_mode="Markdown"
-    )
-
-
-async def add_balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-  if not is_admin(update.effective_user):
-    return
-  try:
-    t_id = int(context.args[0])
-    amt = float(context.args[1])
-    update_user_balance(t_id, amt)
-    await update.message.reply_text(
-        f"✅ *Balance Updated!* User: `{t_id}` | Added: `${amt:.2f}`",
-        parse_mode="Markdown",
-    )
-  except:
-    await update.message.reply_text(
-        "❌ `/addbalance <UserID> <Amount>`", parse_mode="Markdown"
     )
 
 
@@ -1204,7 +1258,7 @@ async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
   msg_text = " ".join(context.args)
   if not msg_text:
     await update.message.reply_text(
-        "❌ `/broadcast <Message>`", parse_mode="Markdown"
+        "❌ `/broadcast <Your Message>`", parse_mode="Markdown"
     )
     return
 
@@ -1219,19 +1273,20 @@ async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
       await context.bot.send_message(
           chat_id=u_id,
-          text=f"📢 *ANNOUNCEMENT*\n\n{msg_text}",
+          text=f"📢 *BROADCAST ANNOUNCEMENT*\n\n{msg_text}",
           parse_mode="Markdown",
       )
       count += 1
     except:
       pass
   await update.message.reply_text(
-      f"📢 Broadcast sent to {count} users!", parse_mode="Markdown"
+      f"📢 সফলভাবে `{count}` জন ইউজারের কাছে মেসেজ পাঠানো হয়েছে!",
+      parse_mode="Markdown",
   )
 
 
 # ----------------------------------------------------
-# 9. MAIN FUNCTION
+# 9. MAIN RUNNER
 # ----------------------------------------------------
 def main():
   server_thread = Thread(target=run_dummy_server, daemon=True)
@@ -1239,7 +1294,7 @@ def main():
 
   token = os.environ.get("BOT_TOKEN")
   if not token:
-    logging.error("No BOT_TOKEN provided!")
+    logging.error("BOT_TOKEN variable is missing in environment!")
     return
 
   app = Application.builder().token(token).build()
@@ -1252,26 +1307,28 @@ def main():
   app.add_handler(CommandHandler("commands", commands_command))
   app.add_handler(CommandHandler("stock", stock_command))
   app.add_handler(CommandHandler("balance", balance_command))
+
+  # Callback & Message Handlers
   app.add_handler(CallbackQueryHandler(button_handler))
   app.add_handler(
       MessageHandler(filters.TEXT & ~filters.COMMAND, text_message_handler)
   )
 
   # Admin Handlers
+  app.add_handler(CommandHandler("addcards", add_cards_cmd))
   app.add_handler(CommandHandler("removecards", remove_cards_cmd))
+  app.add_handler(CommandHandler("addbalance", add_balance_cmd))
   app.add_handler(CommandHandler("setbkash", set_bkash_cmd))
   app.add_handler(CommandHandler("removebkash", remove_bkash_cmd))
   app.add_handler(CommandHandler("setnagad", set_nagad_cmd))
   app.add_handler(CommandHandler("removenagad", remove_nagad_cmd))
-  app.add_handler(CommandHandler("addcards", add_cards_cmd))
   app.add_handler(CommandHandler("userhistory", user_history_cmd))
   app.add_handler(CommandHandler("downloadcards", download_cards_cmd))
   app.add_handler(CommandHandler("downloaddb", download_db_cmd))
   app.add_handler(CommandHandler("searchbin", search_bin_cmd))
-  app.add_handler(CommandHandler("addbalance", add_balance_cmd))
   app.add_handler(CommandHandler("broadcast", broadcast_cmd))
 
-  logging.info("Bot started successfully...")
+  logging.info("Bot execution started...")
   app.run_polling()
 
 
