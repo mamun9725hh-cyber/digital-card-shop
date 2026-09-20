@@ -42,7 +42,6 @@ def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
-    # Users table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
@@ -51,16 +50,15 @@ def init_db():
         )
     ''')
     
-    # Products table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bin TEXT UNIQUE NOT NULL,
             name TEXT NOT NULL,
             price REAL NOT NULL
         )
     ''')
     
-    # Stock table (Cards/Digital Codes)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS stock (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,7 +68,6 @@ def init_db():
         )
     ''')
     
-    # Purchase History
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -124,27 +121,36 @@ def update_user_balance(user_id, amount):
     conn.close()
 
 # ----------------------------------------------------
-# 4. BOT HANDLERS
+# 4. STYLISH BOT HANDLERS
 # ----------------------------------------------------
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     add_or_update_user(user)
+    bal = get_user_balance(user.id)
     
     keyboard = [
-        [InlineKeyboardButton("🛒 Buy Cards", callback_data="buy_menu")],
-        [InlineKeyboardButton("💳 My Balance", callback_data="my_balance"), InlineKeyboardButton("📜 Purchase History", callback_data="my_history")]
+        [InlineKeyboardButton("🛍️ Browse Cards Shop", callback_data="buy_menu")],
+        [InlineKeyboardButton("💰 My Balance", callback_data="my_balance"), InlineKeyboardButton("📜 Purchase History", callback_data="my_history")],
+        [InlineKeyboardButton("👨‍💻 Contact Admin", url=f"https://t.me/{ADMIN_USERNAME}")]
     ]
     
     if is_admin(user):
-        keyboard.append([InlineKeyboardButton("⚙️ Admin Panel", callback_data="admin_panel")])
+        keyboard.append([InlineKeyboardButton("⚡ Admin Control Panel", callback_data="admin_panel")])
         
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await update.message.reply_text(
-        f"👋 Welcome {user.first_name} to Digital Card Shop!\n\n"
-        f"Choose an option below:",
-        reply_markup=reply_markup
+    welcome_text = (
+        f"✨ *━━━━━━━━━━━━━━━━━━━━*\n"
+        f"👑 *PREMIUM DIGITAL CARD STORE* 👑\n"
+        f"✨ *━━━━━━━━━━━━━━━━━━━━*\n\n"
+        f"👋 *Welcome,* `{user.first_name}`!\n"
+        f"🆔 *User ID:* `{user.id}`\n"
+        f"💵 *Your Balance:* `${bal:.2f}`\n\n"
+        f"🚀 *Instant 24/7 Automated Card Delivery!*\n"
+        f"👇 *Select an option below to get started:* "
     )
+    
+    await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode="Markdown")
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -152,45 +158,94 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = query.from_user
     data = query.data
 
-    if data == "my_balance":
+    if data == "start_menu":
         bal = get_user_balance(user.id)
-        await query.edit_message_text(f"💳 Your current balance is: **${bal:.2f}**", parse_mode="Markdown")
+        keyboard = [
+            [InlineKeyboardButton("🛍️ Browse Cards Shop", callback_data="buy_menu")],
+            [InlineKeyboardButton("💰 My Balance", callback_data="my_balance"), InlineKeyboardButton("📜 Purchase History", callback_data="my_history")],
+            [InlineKeyboardButton("👨‍💻 Contact Admin", url=f"https://t.me/{ADMIN_USERNAME}")]
+        ]
+        if is_admin(user):
+            keyboard.append([InlineKeyboardButton("⚡ Admin Control Panel", callback_data="admin_panel")])
+            
+        welcome_text = (
+            f"✨ *━━━━━━━━━━━━━━━━━━━━*\n"
+            f"👑 *PREMIUM DIGITAL CARD STORE* 👑\n"
+            f"✨ *━━━━━━━━━━━━━━━━━━━━*\n\n"
+            f"👋 *Welcome,* `{user.first_name}`!\n"
+            f"🆔 *User ID:* `{user.id}`\n"
+            f"💵 *Your Balance:* `${bal:.2f}`\n\n"
+            f"🚀 *Instant 24/7 Automated Card Delivery!*\n"
+            f"👇 *Select an option below to get started:*"
+        )
+        await query.edit_message_text(welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+    elif data == "my_balance":
+        bal = get_user_balance(user.id)
+        msg = (
+            f"💳 *━━━━━━━━━━━━━━━━━━━━*\n"
+            f"📊 *ACCOUNT BALANCE SUMMARY*\n"
+            f"💳 *━━━━━━━━━━━━━━━━━━━━*\n\n"
+            f"👤 *User:* `{user.first_name}`\n"
+            f"🆔 *User ID:* `{user.id}`\n"
+            f"💎 *Current Balance:* `${bal:.2f}`\n\n"
+            f"💡 *To top-up your balance, contact Admin:* @{ADMIN_USERNAME}"
+        )
+        keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]]
+        await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
         
     elif data == "buy_menu":
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, name, price FROM products")
+        cursor.execute("SELECT p.id, p.bin, p.name, p.price, COUNT(s.id) FROM products p LEFT JOIN stock s ON p.id = s.product_id GROUP BY p.id")
         products = cursor.fetchall()
         conn.close()
         
         if not products:
-            await query.edit_message_text("❌ No products available in the shop currently.")
+            msg = "⚠️ *STORE IS CURRENTLY EMPTY*\n\n_No cards available right now. Please check back later!_"
+            keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]]
+            await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
             return
 
         keyboard = []
-        for p_id, name, price in products:
-            keyboard.append([InlineKeyboardButton(f"{name} - ${price:.2f}", callback_data=f"buy_prod_{p_id}")])
+        for p_id, p_bin, name, price, stock_count in products:
+            keyboard.append([InlineKeyboardButton(f"💳 BIN: {p_bin} | {name} — ${price:.2f} [{stock_count} Stock]", callback_data=f"buy_prod_{p_id}")])
             
-        keyboard.append([InlineKeyboardButton("🔙 Back", callback_data="start_menu")])
-        await query.edit_message_text("🛒 Select a product to buy:", reply_markup=InlineKeyboardMarkup(keyboard))
+        keyboard.append([InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")])
+        
+        msg = (
+            f"🛒 *━━━━━━━━━━━━━━━━━━━━*\n"
+            f"🔥 *AVAILABLE CARDS BY BIN*\n"
+            f"🛒 *━━━━━━━━━━━━━━━━━━━━*\n\n"
+            f"👇 *Select a card type/BIN to buy:* "
+        )
+        await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
     elif data.startswith("buy_prod_"):
         p_id = int(data.split("_")[2])
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT name, price FROM products WHERE id = ?", (p_id,))
+        cursor.execute("SELECT name, bin, price FROM products WHERE id = ?", (p_id,))
         prod = cursor.fetchone()
         
         if not prod:
-            await query.edit_message_text("❌ Product not found.")
+            await query.edit_message_text("❌ *Product not found.*", parse_mode="Markdown")
             conn.close()
             return
             
-        p_name, p_price = prod
+        p_name, p_bin, p_price = prod
         user_bal = get_user_balance(user.id)
         
         if user_bal < p_price:
-            await query.edit_message_text(f"❌ Insufficient balance! Price: ${p_price:.2f}, Your balance:${user_bal:.2f}")
+            msg = (
+                f"❌ *INSUFFICIENT BALANCE!*\n\n"
+                f"💳 *BIN:* `{p_bin}` ({p_name})\n"
+                f"🏷️ *Price:* `${p_price:.2f}`\n"
+                f"💵 *Your Balance:* `${user_bal:.2f}`\n\n"
+                f"⚠️ *Please top up your balance by contacting Admin (@{ADMIN_USERNAME}).*"
+            )
+            keyboard = [[InlineKeyboardButton("🔙 Back to Products", callback_data="buy_menu")]]
+            await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
             conn.close()
             return
 
@@ -198,7 +253,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         stock_item = cursor.fetchone()
         
         if not stock_item:
-            await query.edit_message_text("❌ Out of stock! Please check back later.")
+            msg = f"❌ *OUT OF STOCK!*\n\n_Sorry, BIN `{p_bin}` ({p_name}) is currently sold out. Check back soon!_"
+            keyboard = [[InlineKeyboardButton("🔙 Back to Products", callback_data="buy_menu")]]
+            await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
             conn.close()
             return
             
@@ -208,17 +265,24 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cursor.execute("DELETE FROM stock WHERE id = ?", (s_id,))
         cursor.execute("UPDATE users SET balance = balance - ? WHERE user_id = ?", (p_price, user.id))
         cursor.execute("INSERT INTO history (user_id, product_name, card_data, price) VALUES (?, ?, ?, ?)",
-                       (user.id, p_name, card_data, p_price))
+                       (user.id, f"{p_name} (BIN: {p_bin})", card_data, p_price))
         conn.commit()
         conn.close()
         
-        await query.edit_message_text(
-            f"🎉 **Purchase Successful!**\n\n"
-            f"📦 **Product:** {p_name}\n"
-            f"🔑 **Card Data / Code:** `{card_data}`\n\n"
-            f"Thank you for buying!",
-            parse_mode="Markdown"
+        success_msg = (
+            f"🎉 *━━━━━━━━━━━━━━━━━━━━*\n"
+            f"✅ *PURCHASE SUCCESSFUL!*\n"
+            f"🎉 *━━━━━━━━━━━━━━━━━━━━*\n\n"
+            f"📦 *Item:* `{p_name}`\n"
+            f"💳 *BIN:* `{p_bin}`\n"
+            f"💵 *Paid:* `${p_price:.2f}`\n\n"
+            f"🔑 *YOUR CARD DATA:*\n"
+            f"`{card_data}`\n\n"
+            f"⚡ _Tap on the card details above to copy!_\n"
+            f"❤️ *Thank you for shopping!*"
         )
+        keyboard = [[InlineKeyboardButton("🛍️ Buy More Cards", callback_data="buy_menu")]]
+        await query.edit_message_text(success_msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
     elif data == "my_history":
         conn = get_db()
@@ -228,69 +292,131 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn.close()
         
         if not rows:
-            await query.edit_message_text("📜 You have no purchase history yet.")
+            msg = "📜 *PURCHASE HISTORY*\n\n_You haven't bought any cards yet!_"
+            keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]]
+            await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
             return
             
-        msg = "📜 **Your Last 5 Purchases:**\n\n"
+        msg = f"📜 *━━━━━━━━━━━━━━━━━━━━*\n"
+        msg += f"🛍️ *YOUR LAST 5 PURCHASES*\n"
+        msg += f"📜 *━━━━━━━━━━━━━━━━━━━━*\n\n"
+        
         for p_name, c_data, price, ts in rows:
-            msg += f"• **{p_name}** (${price:.2f})\n  Code: `{c_data}`\n  Date: {ts}\n\n"
+            msg += f"📦 *{p_name}* — `${price:.2f}`\n"
+            msg += f"💳 Details: `{c_data}`\n"
+            msg += f"📅 Date: `{ts}`\n"
+            msg += f"──────────────\n"
             
-        await query.edit_message_text(msg, parse_mode="Markdown")
+        keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]]
+        await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
     elif data == "admin_panel":
         if not is_admin(user):
-            await query.edit_message_text("❌ Unauthorized access!")
+            await query.edit_message_text("🚫 *Unauthorized Access!*", parse_mode="Markdown")
             return
             
         msg = (
-            "⚙️ **Admin Commands Panel**\n\n"
-            "• `/addproduct <Name> <Price>` - Add a new product\n"
-            "• `/addstock <ProductID> <CardData>` - Add stock code/card\n"
-            "• `/addbalance <UserID> <Amount>` - Add balance to a user\n"
-            "• `/broadcast <Message>` - Send message to all users"
+            f"⚡ *━━━━━━━━━━━━━━━━━━━━*\n"
+            f"⚙️ *ADMIN CONTROL PANEL*\n"
+            f"⚡ *━━━━━━━━━━━━━━━━━━━━*\n\n"
+            f"📥 *BULK ADD CARDS BY BIN:*\n"
+            f"`/addcards <BIN> <Name> <Price>`\n"
+            f"_(Past cards line by line in the same message)_\n\n"
+            f"🔎 *SEARCH BIN STOCK:*\n"
+            f"`/searchbin <BIN>`\n\n"
+            f"💰 *ADD USER BALANCE:*\n"
+            f"`/addbalance <UserID> <Amount>`\n\n"
+            f"📢 *BROADCAST MESSAGE:*\n"
+            f"`/broadcast <Your Message>`"
         )
-        await query.edit_message_text(msg, parse_mode="Markdown")
+        keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]]
+        await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
 # ----------------------------------------------------
 # 5. ADMIN COMMAND HANDLERS
 # ----------------------------------------------------
-async def add_product_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def add_cards_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
         return
         
     try:
-        args = context.args
-        price = float(args[-1])
-        name = " ".join(args[:-1])
+        text_lines = update.message.text.split("\n")
+        first_line_parts = text_lines[0].split()
         
+        bin_code = first_line_parts[1]
+        price = float(first_line_parts[-1])
+        p_name = " ".join(first_line_parts[2:-1]) if len(first_line_parts) > 3 else f"BIN {bin_code}"
+        
+        cards = [line.strip() for line in text_lines[1:] if line.strip()]
+        
+        if not cards:
+            await update.message.reply_text("❌ *No card data found under the command!*", parse_mode="Markdown")
+            return
+            
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO products (name, price) VALUES (?, ?)", (name, price))
-        p_id = cursor.lastrowid
+        
+        # Insert or update Product/BIN
+        cursor.execute("INSERT OR IGNORE INTO products (bin, name, price) VALUES (?, ?, ?)", (bin_code, p_name, price))
+        cursor.execute("UPDATE products SET price = ?, name = ? WHERE bin = ?", (price, p_name, bin_code))
+        
+        cursor.execute("SELECT id FROM products WHERE bin = ?", (bin_code,))
+        p_id = cursor.fetchone()[0]
+        
+        for c in cards:
+            cursor.execute("INSERT INTO stock (product_id, card_data) VALUES (?, ?)", (p_id, c))
+            
         conn.commit()
         conn.close()
         
-        await update.message.reply_text(f"✅ Product added successfully! ID: `{p_id}` | Name: {name} | Price: ${price:.2f}", parse_mode="Markdown")
+        await update.message.reply_text(
+            f"🎉 *CARDS ADDED SUCCESSFULLY!*\n\n"
+            f"💳 *BIN:* `{bin_code}`\n"
+            f"📦 *Category:* `{p_name}`\n"
+            f"🏷️ *Price:* `${price:.2f}`\n"
+            f"📥 *Total Cards Added:* `{len(cards)}`",
+            parse_mode="Markdown"
+        )
     except Exception:
-        await update.message.reply_text("❌ Usage: `/addproduct <Name> <Price>`\nExample: `/addproduct Netflix Premium 5.00`", parse_mode="Markdown")
+        await update.message.reply_text(
+            "❌ *Usage Format:*\n"
+            "`/addcards <BIN> <Name> <Price>`\n"
+            "`CardDetails1`\n"
+            "`CardDetails2`\n\n"
+            "👉 *Example:*\n"
+            "`/addcards 403163 Visa Platinum 2.50`\n"
+            "`4031630011223344|05|28|123`\n"
+            "`4031630055667788|11|27|456`",
+            parse_mode="Markdown"
+        )
 
-async def add_stock_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def search_bin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
         return
         
     try:
-        p_id = int(context.args[0])
-        card_data = " ".join(context.args[1:])
-        
+        bin_code = context.args[0]
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO stock (product_id, card_data) VALUES (?, ?)", (p_id, card_data))
-        conn.commit()
+        cursor.execute("SELECT p.name, p.price, COUNT(s.id) FROM products p LEFT JOIN stock s ON p.id = s.product_id WHERE p.bin = ? GROUP BY p.id", (bin_code,))
+        res = cursor.fetchone()
         conn.close()
         
-        await update.message.reply_text(f"✅ Stock added successfully for Product ID `{p_id}`!", parse_mode="Markdown")
+        if not res:
+            await update.message.reply_text(f"❌ *BIN `{bin_code}` not found in shop.*", parse_mode="Markdown")
+            return
+            
+        name, price, stock = res
+        await update.message.reply_text(
+            f"🔎 *BIN SEARCH DETAILS:*\n\n"
+            f"💳 *BIN:* `{bin_code}`\n"
+            f"📦 *Name:* `{name}`\n"
+            f"💵 *Price:* `${price:.2f}`\n"
+            f"📊 *Available Stock:* `{stock}` cards",
+            parse_mode="Markdown"
+        )
     except Exception:
-        await update.message.reply_text("❌ Usage: `/addstock <ProductID> <CardData>`\nExample: `/addstock 1 XXXX-YYYY-ZZZZ`", parse_mode="Markdown")
+        await update.message.reply_text("❌ *Usage:* `/searchbin <BIN>`\n*Example:* `/searchbin 403163`", parse_mode="Markdown")
 
 async def add_balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
@@ -301,9 +427,14 @@ async def add_balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount = float(context.args[1])
         
         update_user_balance(target_user_id, amount)
-        await update.message.reply_text(f"✅ Added ${amount:.2f} to user ID `{target_user_id}`!", parse_mode="Markdown")
+        await update.message.reply_text(
+            f"✅ *BALANCE UPDATED!*\n\n"
+            f"👤 *Target User ID:* `{target_user_id}`\n"
+            f"💰 *Added Amount:* `${amount:.2f}`",
+            parse_mode="Markdown"
+        )
     except Exception:
-        await update.message.reply_text("❌ Usage: `/addbalance <UserID> <Amount>`\nExample: `/addbalance 123456789 10.00`", parse_mode="Markdown")
+        await update.message.reply_text("❌ *Usage:* `/addbalance <UserID> <Amount>`\n*Example:* `/addbalance 123456789 10.00`", parse_mode="Markdown")
 
 async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
@@ -311,7 +442,7 @@ async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     message_text = " ".join(context.args)
     if not message_text:
-        await update.message.reply_text("❌ Usage: `/broadcast <Your Message>`")
+        await update.message.reply_text("❌ *Usage:* `/broadcast <Your Message>`", parse_mode="Markdown")
         return
         
     conn = get_db()
@@ -323,18 +454,23 @@ async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     count = 0
     for (u_id,) in users:
         try:
-            await context.bot.send_message(chat_id=u_id, text=f"📢 **Announcement:**\n\n{message_text}", parse_mode="Markdown")
+            broadcast_msg = (
+                f"📢 *━━━━━━━━━━━━━━━━━━━━*\n"
+                f"🔔 *ANNOUNCEMENT FROM ADMIN*\n"
+                f"📢 *━━━━━━━━━━━━━━━━━━━━*\n\n"
+                f"{message_text}"
+            )
+            await context.bot.send_message(chat_id=u_id, text=broadcast_msg, parse_mode="Markdown")
             count += 1
         except Exception:
             pass
             
-    await update.message.reply_text(f"📢 Broadcast sent to {count} users!")
+    await update.message.reply_text(f"📢 *Broadcast successfully sent to {count} users!*", parse_mode="Markdown")
 
 # ----------------------------------------------------
 # 6. MAIN FUNCTION
 # ----------------------------------------------------
 def main():
-    # Start Dummy Server in a separate thread for Render
     server_thread = Thread(target=run_dummy_server, daemon=True)
     server_thread.start()
     
@@ -350,12 +486,12 @@ def main():
     app.add_handler(CallbackQueryHandler(button_handler))
 
     # Admin Handlers
-    app.add_handler(CommandHandler("addproduct", add_product_cmd))
-    app.add_handler(CommandHandler("addstock", add_stock_cmd))
+    app.add_handler(CommandHandler("addcards", add_cards_cmd))
+    app.add_handler(CommandHandler("searchbin", search_bin_cmd))
     app.add_handler(CommandHandler("addbalance", add_balance_cmd))
     app.add_handler(CommandHandler("broadcast", broadcast_cmd))
 
-    logging.info("Bot started successfully...")
+    logging.info("Stylish Digital Card Shop Bot started successfully...")
     app.run_polling()
 
 if __name__ == "__main__":
