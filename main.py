@@ -311,8 +311,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn.close()
         
         if not products:
-            msg = "⚠️ *STORE IS CURRENTLY EMPTY*\n\n_No cards available right now. Please check back later!_"
-            keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]]
+            msg = (
+                f"⚠️ *STORE IS CURRENTLY EMPTY*\n\n"
+                f"_বটে বর্তমানে কোনো কার্ড স্টকে নেই।_\n\n"
+                f"📲 *আপনার কি কোনো নির্দিষ্ট BIN-এর কার্ড প্রয়োজন?*\n"
+                f"অ্যাডমিনের সাথে যোগাযোগ করে আপনার প্রয়োজনীয় BIN-এর কার্ড বটের স্টকে যুক্ত করে নিন!\n\n"
+                f"📌 *বিশেষ দ্রষ্টব্য (Note):*\n"
+                f"কাস্টম BIN রিকোয়েস্টের জন্য **শুধুমাত্র Visa Card** BIN-এর ক্ষেত্রে যোগাযোগ করুন। MasterCard বর্তমানে কাজ করছে না।"
+            )
+            keyboard = [
+                [InlineKeyboardButton("👨‍💻 Request BIN to Admin", url=f"https://t.me/{ADMIN_USERNAME}")],
+                [InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]
+            ]
             await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
             return
 
@@ -320,13 +330,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for p_id, p_bin, name, price, stock_count in products:
             keyboard.append([InlineKeyboardButton(f"💳 BIN: {p_bin} | {name} — ${price:.2f} [{stock_count} Stock]", callback_data=f"buy_prod_{p_id}")])
             
+        keyboard.append([InlineKeyboardButton("👨‍💻 Need Custom BIN? Contact Admin", url=f"https://t.me/{ADMIN_USERNAME}")])
         keyboard.append([InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")])
         
         msg = (
             f"🛒 *━━━━━━━━━━━━━━━━━━━━*\n"
             f"🔥 *AVAILABLE CARDS BY BIN*\n"
             f"🛒 *━━━━━━━━━━━━━━━━━━━━*\n\n"
-            f"👇 *Select a card type/BIN to buy:*"
+            f"👇 *Select a card type/BIN to buy:*\n\n"
+            f"💡 _আপনার কাঙ্ক্ষিত BIN যদি এখানে না থাকে, তবে এডমিনের সাথে যোগাযোগ করে এড করিয়ে নিন!_\n"
+            f"📌 *Note:* কাস্টম BIN-এর জন্য শুধুমাত্র *Visa Card* BIN প্রযোজ্য (MasterCard সমস্যামুক্ত নয়)।"
         )
         await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
@@ -362,8 +375,17 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         stock_item = cursor.fetchone()
         
         if not stock_item:
-            msg = f"❌ *OUT OF STOCK!*\n\n_Sorry, BIN `{p_bin}` ({p_name}) is currently sold out. Check back soon!_"
-            keyboard = [[InlineKeyboardButton("🔙 Back to Products", callback_data="buy_menu")]]
+            msg = (
+                f"❌ *OUT OF STOCK!*\n\n"
+                f"দুঃখিত, BIN `{p_bin}` ({p_name})-এর স্টক শেষ হয়ে গেছে।\n\n"
+                f"📲 *কার্ড প্রয়োজন?*\n"
+                f"অ্যাডমিনের সাথে সরাসরি যোগাযোগ করে বটের স্টকে কার্ড যুক্ত করে নিতে পারেন।\n\n"
+                f"📌 *Note:* কাস্টম BIN রিকোয়েস্টের জন্য শুধুমাত্র *Visa Card* BIN-এর ক্ষেত্রে যোগাযোগ করুন।"
+            )
+            keyboard = [
+                [InlineKeyboardButton("👨‍💻 Contact Admin for Stock", url=f"https://t.me/{ADMIN_USERNAME}")],
+                [InlineKeyboardButton("🔙 Back to Products", callback_data="buy_menu")]
+            ]
             await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
             conn.close()
             return
@@ -488,8 +510,18 @@ async def text_message_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         prod = cursor.fetchone()
         
         if not prod:
-            msg = f"❌ *BIN NOT FOUND!*\n\n_স্টকে `{input_bin}` BIN-এর কোনো প্রোডাক্ট খুঁজে পাওয়া যায়নি। দয়া করে সঠিক BIN লিখুন।_"
-            keyboard = [[InlineKeyboardButton("🔄 Try Another BIN", callback_data="claim_trial")]]
+            msg = (
+                f"❌ *BIN NOT FOUND IN STOCK!*\n\n"
+                f"স্টকে `{input_bin}` BIN-এর কোনো কার্ড খুঁজে পাওয়া যায়নি।\n\n"
+                f"📲 *আপনার কি এই BIN-এর কার্ড প্রয়োজন?*\n"
+                f"অ্যাডমিনের সাথে সরাসরি যোগাযোগ করে আপনার কাঙ্ক্ষিত BIN-এর কার্ড বটের স্টকে যুক্ত করে নিতে পারেন!\n\n"
+                f"📌 *বিশেষ দ্রষ্টব্য (Note):*\n"
+                f"কাস্টম BIN রিকোয়েস্ট করার জন্য **শুধুমাত্র Visa Card (ভিসা)** BIN-এর জন্য যোগাযোগ করুন। MasterCard বর্তমানে সাপোর্ট করে না।"
+            )
+            keyboard = [
+                [InlineKeyboardButton("👨‍💻 Contact Admin to Add BIN", url=f"https://t.me/{ADMIN_USERNAME}")],
+                [InlineKeyboardButton("🔄 Try Another BIN", callback_data="claim_trial")]
+            ]
             await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
             conn.close()
             return
@@ -499,8 +531,17 @@ async def text_message_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         stock_items = cursor.fetchall()
         
         if len(stock_items) < 2:
-            msg = f"⚠️ *NOT ENOUGH TRIAL CARDS IN STOCK!*\n\n_`{input_bin}` BIN-এ বর্তমানে ট্রায়ালের জন্য ২ টি কার্ড স্টকে নেই। অন্য BIN চেষ্টা করুন।_"
-            keyboard = [[InlineKeyboardButton("🔄 Try Another BIN", callback_data="claim_trial")]]
+            msg = (
+                f"⚠️ *NOT ENOUGH TRIAL CARDS IN STOCK!*\n\n"
+                f"`{input_bin}` BIN-এ বর্তমানে ট্রায়ালের জন্য ২ টি কার্ড স্টকে নেই।\n\n"
+                f"📲 *কার্ড অ্যাড করতে অ্যাডমিনকে জানান:*\n"
+                f"অ্যাডমিনের সাথে সরাসরি কথা বলে এই BIN-এর কার্ড স্টকে যুক্ত করে নিতে পারেন।\n\n"
+                f"📌 *Note:* কাস্টম BIN রিকোয়েস্টের ক্ষেত্রে শুধুমাত্র *Visa Card* BIN গ্রহণ করা হয়।"
+            )
+            keyboard = [
+                [InlineKeyboardButton("👨‍💻 Contact Admin", url=f"https://t.me/{ADMIN_USERNAME}")],
+                [InlineKeyboardButton("🔄 Try Another BIN", callback_data="claim_trial")]
+            ]
             await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
             conn.close()
             return
