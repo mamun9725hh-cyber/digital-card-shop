@@ -8,13 +8,18 @@ from telegram.ext import (
     Application,
     CommandHandler,
     CallbackQueryHandler,
-    MessageHandler,
     ContextTypes,
-    filters,
 )
 
 # ----------------------------------------------------
-# 1. DUMMY HTTP SERVER (For Render Free Tier Keep-Alive)
+# CONFIGURATION
+# ----------------------------------------------------
+ADMIN_USERNAME = "Trusted_zone_1122"
+CHANNEL_USERNAME = "@help_centre_1122"  # Force join channel
+CHANNEL_URL = "https://t.me/help_centre_1122"
+
+# ----------------------------------------------------
+# 1. DUMMY HTTP SERVER (For Render Free Tier)
 # ----------------------------------------------------
 class DummyHTTPHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -46,7 +51,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
             username TEXT,
-            balance REAL DEFAULT 0.0
+            balance REAL DEFAULT 0.0,
+            has_claimed_trial INTEGER DEFAULT 0
         )
     ''')
     
@@ -79,6 +85,13 @@ def init_db():
         )
     ''')
     
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    ''')
+    
     conn.commit()
     conn.close()
 
@@ -87,8 +100,6 @@ init_db()
 # ----------------------------------------------------
 # 3. HELPER FUNCTIONS
 # ----------------------------------------------------
-ADMIN_USERNAME = "Trusted_zone_1122"
-
 def get_db():
     return sqlite3.connect(DB_NAME)
 
@@ -100,7 +111,7 @@ def is_admin(user) -> bool:
 def add_or_update_user(user):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("INSERT OR IGNORE INTO users (user_id, username, balance) VALUES (?, ?, 0.0)", (user.id, user.username))
+    cursor.execute("INSERT OR IGNORE INTO users (user_id, username, balance, has_claimed_trial) VALUES (?, ?, 0.0, 0)", (user.id, user.username))
     cursor.execute("UPDATE users SET username = ? WHERE user_id = ?", (user.username, user.id))
     conn.commit()
     conn.close()
@@ -120,6 +131,49 @@ def update_user_balance(user_id, amount):
     conn.commit()
     conn.close()
 
+def get_setting(key) -> str:
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else None
+
+def set_setting(key, value):
+    conn = get_db()
+    cursor = conn.cursor()
+    if value is None:
+        cursor.execute("DELETE FROM settings WHERE key = ?", (key,))
+    else:
+        cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
+    conn.commit()
+    conn.close()
+
+def has_claimed_trial(user_id) -> bool:
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT has_claimed_trial FROM users WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return True if row and row[0] == 1 else False
+
+def set_claimed_trial(user_id):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET has_claimed_trial = 1 WHERE user_id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+
+async def is_user_joined(bot, user_id) -> bool:
+    try:
+        member = await bot.get_chat_member(chat_id=CHANNEL_USERNAME, user_id=user_id)
+        if member.status in ['creator', 'administrator', 'member']:
+            return True
+        return False
+    except Exception as e:
+        logging.error(f"Error checking channel membership: {e}")
+        return True # If bot isn't admin yet or error occurs, fallback to allow
+
 # ----------------------------------------------------
 # 4. BOT HANDLERS & INTERFACE
 # ----------------------------------------------------
@@ -130,7 +184,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     keyboard = [
         [InlineKeyboardButton("🛍️ Browse Cards Shop", callback_data="buy_menu")],
+        [InlineKeyboardButton("🎁 Free Trial (2 Cards)", callback_data="claim_trial")],
         [InlineKeyboardButton("💰 My Balance", callback_data="my_balance"), InlineKeyboardButton("📜 Purchase History", callback_data="my_history")],
+        [InlineKeyboardButton("📢 Telegram Channel", url=CHANNEL_URL)],
         [InlineKeyboardButton("👨‍💻 Contact Admin", url=f"https://t.me/{ADMIN_USERNAME}")]
     ]
     
@@ -162,7 +218,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bal = get_user_balance(user.id)
         keyboard = [
             [InlineKeyboardButton("🛍️ Browse Cards Shop", callback_data="buy_menu")],
+            [InlineKeyboardButton("🎁 Free Trial (2 Cards)", callback_data="claim_trial")],
             [InlineKeyboardButton("💰 My Balance", callback_data="my_balance"), InlineKeyboardButton("📜 Purchase History", callback_data="my_history")],
+            [InlineKeyboardButton("📢 Telegram Channel", url=CHANNEL_URL)],
             [InlineKeyboardButton("👨‍💻 Contact Admin", url=f"https://t.me/{ADMIN_USERNAME}")]
         ]
         if is_admin(user):
@@ -180,16 +238,109 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await query.edit_message_text(welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
+    elif data == "claim_trial":
+        # Force Join Check
+        joined = await is_user_joined(context.bot, user.id)
+        if not joined:
+            msg = (
+                f"⚠️ *MUST JOIN OUR TELEGRAM CHANNEL!*\n\n"
+                f"ফ্রি ট্রায়াল (২টি কার্ড) ক্লেইম করতে হলে আপনাকে অবশ্যই আমাদের টেলিগ্রাম সিগন্যাল চ্যানেলে জয়েন থাকতে হবে।\n\n"
+                f"👇 নিচের বাটন থেকে চ্যানেলে জয়েন করুন এবং তারপর *Claim Trial Again* এ চাপুন:"
+            )
+            keyboard = [
+                [InlineKeyboardButton("📢 Join Telegram Channel", url=CHANNEL_URL)],
+                [InlineKeyboardButton("🔄 Claim Trial Again", callback_data="claim_trial")],
+                [InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]
+            ]
+            await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+            return
+
+        if has_claimed_trial(user.id):
+            msg = "❌ *TRIAL ALREADY CLAIMED!*\n\n_You have already used your 1-time Free Trial. Please buy cards from the shop!_"
+            keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]]
+            await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+            return
+
+        trial_bin = get_setting("trial_bin")
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        if trial_bin:
+            cursor.execute("SELECT p.id, p.name, p.bin FROM products p WHERE p.bin = ?", (trial_bin,))
+        else:
+            cursor.execute("SELECT p.id, p.name, p.bin FROM products p ORDER BY p.id ASC LIMIT 1")
+            
+        prod = cursor.fetchone()
+        
+        if not prod:
+            msg = "⚠️ *FREE TRIAL CURRENTLY UNAVAILABLE*\n\n_No stock available for free trial at the moment. Please check back later!_"
+            keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]]
+            await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+            conn.close()
+            return
+            
+        p_id, p_name, p_bin = prod
+        cursor.execute("SELECT id, card_data FROM stock WHERE product_id = ? LIMIT 2", (p_id,))
+        stock_items = cursor.fetchall()
+        
+        if len(stock_items) < 2:
+            msg = "⚠️ *NOT ENOUGH TRIAL CARDS IN STOCK*\n\n_Free trial stock is empty right now! Contact Admin._"
+            keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]]
+            await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+            conn.close()
+            return
+            
+        card_texts = []
+        for s_id, c_data in stock_items:
+            cursor.execute("DELETE FROM stock WHERE id = ?", (s_id,))
+            card_texts.append(c_data)
+            cursor.execute("INSERT INTO history (user_id, product_name, card_data, price) VALUES (?, ?, ?, ?)",
+                           (user.id, f"FREE TRIAL ({p_name})", c_data, 0.0))
+            
+        set_claimed_trial(user.id)
+        conn.commit()
+        conn.close()
+        
+        msg = (
+            f"🎁 *━━━━━━━━━━━━━━━━━━━━*\n"
+            f"🎉 *FREE TRIAL CLAIMED SUCCESSFULLY!*\n"
+            f"🎁 *━━━━━━━━━━━━━━━━━━━━*\n\n"
+            f"📦 *Item:* `Free Trial ({p_name})`\n"
+            f"💳 *BIN:* `{p_bin}`\n\n"
+            f"🔑 *YOUR 2 FREE CARDS:*\n"
+            f"1️⃣ `{card_texts[0]}`\n"
+            f"2️⃣ `{card_texts[1]}`\n\n"
+            f"⚡ _Tap on the card details above to copy!_\n"
+            f"❤️ *Enjoy your free trial!*"
+        )
+        keyboard = [[InlineKeyboardButton("🛍️ Browse Shop", callback_data="buy_menu")]]
+        await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
     elif data == "my_balance":
         bal = get_user_balance(user.id)
+        bkash_num = get_setting("bkash")
+        nagad_num = get_setting("nagad")
+        
+        payment_info = ""
+        if bkash_num or nagad_num:
+            payment_info += "\n📲 *PAYMENT METHODS (TOP-UP):*\n"
+            if bkash_num:
+                payment_info += f"🌸 *bKash (Personal):* `{bkash_num}`\n"
+            if nagad_num:
+                payment_info += f"🟠 *Nagad (Personal):* `{nagad_num}`\n"
+            payment_info += "\n⚠️ _টাকা পাঠানোর পর ট্রানজেকশন স্ক্রিনশট ও আপনার User ID সহ এডমিনকে পাঠান।_\n"
+        else:
+            payment_info += "\n💡 *To top-up your balance, contact Admin directly.*"
+
         msg = (
             f"💳 *━━━━━━━━━━━━━━━━━━━━*\n"
             f"📊 *ACCOUNT BALANCE SUMMARY*\n"
             f"💳 *━━━━━━━━━━━━━━━━━━━━*\n\n"
             f"👤 *User:* `{user.first_name}`\n"
             f"🆔 *User ID:* `{user.id}`\n"
-            f"💎 *Current Balance:* `${bal:.2f}`\n\n"
-            f"💡 *To top-up your balance, contact Admin:* @{ADMIN_USERNAME}"
+            f"💎 *Current Balance:* `${bal:.2f}`\n"
+            f"{payment_info}\n"
+            f"👨‍💻 *Admin:* @{ADMIN_USERNAME}"
         )
         keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]]
         await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
@@ -249,7 +400,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             conn.close()
             return
 
-        # Fetch 1 stock card
         cursor.execute("SELECT id, card_data FROM stock WHERE product_id = ? LIMIT 1", (p_id,))
         stock_item = cursor.fetchone()
         
@@ -262,7 +412,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         s_id, card_data = stock_item
         
-        # ⚠️ STRICT PURCHASE PROCESS: REMOVE CARD FROM STOCK IMMEDIATELY
         cursor.execute("DELETE FROM stock WHERE id = ?", (s_id,))
         cursor.execute("UPDATE users SET balance = balance - ? WHERE user_id = ?", (p_price, user.id))
         cursor.execute("INSERT INTO history (user_id, product_name, card_data, price) VALUES (?, ?, ?, ?)",
@@ -316,18 +465,27 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("🚫 *Unauthorized Access!*", parse_mode="Markdown")
             return
             
+        bkash_n = get_setting("bkash") or "Not Set"
+        nagad_n = get_setting("nagad") or "Not Set"
+        trial_b = get_setting("trial_bin") or "First Available BIN"
+        
         msg = (
             f"⚡ *━━━━━━━━━━━━━━━━━━━━*\n"
             f"⚙️ *ADMIN CONTROL PANEL*\n"
             f"⚡ *━━━━━━━━━━━━━━━━━━━━*\n\n"
+            f"🎁 *FREE TRIAL SETTING:*\n"
+            f"• Current BIN: `{trial_b}`\n"
+            f"👉 `/settrialbin <BIN>`\n\n"
+            f"📲 *PAYMENT NUMBERS:*\n"
+            f"• bKash: `{bkash_n}` | Nagad: `{nagad_n}`\n"
+            f"👉 `/setbkash <Num>` | `/setnagad <Num>`\n"
+            f"👉 `/removebkash` | `/removenagad`\n\n"
             f"📥 *BULK ADD CARDS BY BIN:*\n"
-            f"`/addcards <BIN> <Name> <Price>`\n"
-            f"_(Past cards line by line in same msg)_\n\n"
+            f"`/addcards <BIN> <Name> <Price>`\n\n"
             f"🔎 *CHECK USER PURCHASE HISTORY:*\n"
             f"`/userhistory <UserID>`\n\n"
             f"📁 *BACKUP & DOWNLOAD:*\n"
-            f"`/downloadcards` - _All stock in TXT_\n"
-            f"`/downloaddb` - _Full Database_\n\n"
+            f"`/downloadcards` | `/downloaddb`\n\n"
             f"🔎 *SEARCH BIN STOCK:*\n"
             f"`/searchbin <BIN>`\n\n"
             f"💰 *ADD USER BALANCE:*\n"
@@ -341,6 +499,48 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ----------------------------------------------------
 # 5. ADMIN COMMAND HANDLERS
 # ----------------------------------------------------
+async def set_trial_bin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user):
+        return
+    try:
+        bin_code = context.args[0]
+        set_setting("trial_bin", bin_code)
+        await update.message.reply_text(f"✅ *Free Trial BIN set to:* `{bin_code}`", parse_mode="Markdown")
+    except Exception:
+        await update.message.reply_text("❌ *Usage:* `/settrialbin <BIN>`\n*Example:* `/settrialbin 411111`", parse_mode="Markdown")
+
+async def set_bkash_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user):
+        return
+    try:
+        number = context.args[0]
+        set_setting("bkash", number)
+        await update.message.reply_text(f"✅ *bKash Number Updated to:* `{number}`", parse_mode="Markdown")
+    except Exception:
+        await update.message.reply_text("❌ *Usage:* `/setbkash <Number>`", parse_mode="Markdown")
+
+async def remove_bkash_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user):
+        return
+    set_setting("bkash", None)
+    await update.message.reply_text("🗑️ *bKash Number Removed Successfully!*", parse_mode="Markdown")
+
+async def set_nagad_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user):
+        return
+    try:
+        number = context.args[0]
+        set_setting("nagad", number)
+        await update.message.reply_text(f"✅ *Nagad Number Updated to:* `{number}`", parse_mode="Markdown")
+    except Exception:
+        await update.message.reply_text("❌ *Usage:* `/setnagad <Number>`", parse_mode="Markdown")
+
+async def remove_nagad_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user):
+        return
+    set_setting("nagad", None)
+    await update.message.reply_text("🗑️ *Nagad Number Removed Successfully!*", parse_mode="Markdown")
+
 async def add_cards_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
         return
@@ -410,7 +610,7 @@ async def user_history_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = f"📜 *PURCHASE HISTORY FOR USER:* `{target_user_id}`\n"
         msg += f"📊 *Total Cards Bought:* `{len(rows)}`\n\n"
         
-        for p_name, c_data, price, ts in rows[:15]: # Show max 15 items in text
+        for p_name, c_data, price, ts in rows[:15]:
             msg += f"📦 *{p_name}* — `${price:.2f}`\n"
             msg += f"💳 Card: `{c_data}`\n"
             msg += f"📅 Date: `{ts}`\n"
@@ -418,7 +618,7 @@ async def user_history_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         await update.message.reply_text(msg, parse_mode="Markdown")
     except Exception:
-        await update.message.reply_text("❌ *Usage:* `/userhistory <UserID>`\n*Example:* `/userhistory 123456789`", parse_mode="Markdown")
+        await update.message.reply_text("❌ *Usage:* `/userhistory <UserID>`", parse_mode="Markdown")
 
 async def download_cards_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
@@ -549,6 +749,11 @@ def main():
     app.add_handler(CallbackQueryHandler(button_handler))
 
     # Admin Handlers
+    app.add_handler(CommandHandler("settrialbin", set_trial_bin_cmd))
+    app.add_handler(CommandHandler("setbkash", set_bkash_cmd))
+    app.add_handler(CommandHandler("removebkash", remove_bkash_cmd))
+    app.add_handler(CommandHandler("setnagad", set_nagad_cmd))
+    app.add_handler(CommandHandler("removenagad", remove_nagad_cmd))
     app.add_handler(CommandHandler("addcards", add_cards_cmd))
     app.add_handler(CommandHandler("userhistory", user_history_cmd))
     app.add_handler(CommandHandler("downloadcards", download_cards_cmd))
