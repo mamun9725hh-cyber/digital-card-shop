@@ -8,7 +8,9 @@ from telegram.ext import (
     Application,
     CommandHandler,
     CallbackQueryHandler,
+    MessageHandler,
     ContextTypes,
+    filters,
 )
 
 # ----------------------------------------------------
@@ -172,7 +174,7 @@ async def is_user_joined(bot, user_id) -> bool:
         return False
     except Exception as e:
         logging.error(f"Error checking channel membership: {e}")
-        return True # If bot isn't admin yet or error occurs, fallback to allow
+        return True # Fallback if error
 
 # ----------------------------------------------------
 # 4. BOT HANDLERS & INTERFACE
@@ -244,7 +246,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not joined:
             msg = (
                 f"⚠️ *MUST JOIN OUR TELEGRAM CHANNEL!*\n\n"
-                f"ফ্রি ট্রায়াল (২টি কার্ড) ক্লেইম করতে হলে আপনাকে অবশ্যই আমাদের টেলিগ্রাম সিগন্যাল চ্যানেলে জয়েন থাকতে হবে।\n\n"
+                f"ফ্রি ট্রায়াল ক্লেইম করতে হলে আপনাকে অবশ্যই আমাদের সিগন্যাল চ্যানেলে জয়েন থাকতে হবে।\n\n"
                 f"👇 নিচের বাটন থেকে চ্যানেলে জয়েন করুন এবং তারপর *Claim Trial Again* এ চাপুন:"
             )
             keyboard = [
@@ -261,59 +263,15 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
             return
 
-        trial_bin = get_setting("trial_bin")
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        if trial_bin:
-            cursor.execute("SELECT p.id, p.name, p.bin FROM products p WHERE p.bin = ?", (trial_bin,))
-        else:
-            cursor.execute("SELECT p.id, p.name, p.bin FROM products p ORDER BY p.id ASC LIMIT 1")
-            
-        prod = cursor.fetchone()
-        
-        if not prod:
-            msg = "⚠️ *FREE TRIAL CURRENTLY UNAVAILABLE*\n\n_No stock available for free trial at the moment. Please check back later!_"
-            keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]]
-            await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
-            conn.close()
-            return
-            
-        p_id, p_name, p_bin = prod
-        cursor.execute("SELECT id, card_data FROM stock WHERE product_id = ? LIMIT 2", (p_id,))
-        stock_items = cursor.fetchall()
-        
-        if len(stock_items) < 2:
-            msg = "⚠️ *NOT ENOUGH TRIAL CARDS IN STOCK*\n\n_Free trial stock is empty right now! Contact Admin._"
-            keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="start_menu")]]
-            await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
-            conn.close()
-            return
-            
-        card_texts = []
-        for s_id, c_data in stock_items:
-            cursor.execute("DELETE FROM stock WHERE id = ?", (s_id,))
-            card_texts.append(c_data)
-            cursor.execute("INSERT INTO history (user_id, product_name, card_data, price) VALUES (?, ?, ?, ?)",
-                           (user.id, f"FREE TRIAL ({p_name})", c_data, 0.0))
-            
-        set_claimed_trial(user.id)
-        conn.commit()
-        conn.close()
-        
+        context.user_data["awaiting_trial_bin"] = True
         msg = (
             f"🎁 *━━━━━━━━━━━━━━━━━━━━*\n"
-            f"🎉 *FREE TRIAL CLAIMED SUCCESSFULLY!*\n"
+            f"🔍 *ENTER BIN FOR FREE TRIAL*\n"
             f"🎁 *━━━━━━━━━━━━━━━━━━━━*\n\n"
-            f"📦 *Item:* `Free Trial ({p_name})`\n"
-            f"💳 *BIN:* `{p_bin}`\n\n"
-            f"🔑 *YOUR 2 FREE CARDS:*\n"
-            f"1️⃣ `{card_texts[0]}`\n"
-            f"2️⃣ `{card_texts[1]}`\n\n"
-            f"⚡ _Tap on the card details above to copy!_\n"
-            f"❤️ *Enjoy your free trial!*"
+            f"আপনি যে BIN-এর ২টি ফ্রি ট্রায়াল কার্ড চান, সেই **6-Digit BIN** টি এখানে মেসেজে লিখে পাঠান।\n\n"
+            f"💡 *Example:* `411111`"
         )
-        keyboard = [[InlineKeyboardButton("🛍️ Browse Shop", callback_data="buy_menu")]]
+        keyboard = [[InlineKeyboardButton("🔙 Cancel", callback_data="start_menu")]]
         await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
     elif data == "my_balance":
@@ -467,15 +425,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         bkash_n = get_setting("bkash") or "Not Set"
         nagad_n = get_setting("nagad") or "Not Set"
-        trial_b = get_setting("trial_bin") or "First Available BIN"
         
         msg = (
             f"⚡ *━━━━━━━━━━━━━━━━━━━━*\n"
             f"⚙️ *ADMIN CONTROL PANEL*\n"
             f"⚡ *━━━━━━━━━━━━━━━━━━━━*\n\n"
-            f"🎁 *FREE TRIAL SETTING:*\n"
-            f"• Current BIN: `{trial_b}`\n"
-            f"👉 `/settrialbin <BIN>`\n\n"
             f"📲 *PAYMENT NUMBERS:*\n"
             f"• bKash: `{bkash_n}` | Nagad: `{nagad_n}`\n"
             f"👉 `/setbkash <Num>` | `/setnagad <Num>`\n"
@@ -497,18 +451,89 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
 # ----------------------------------------------------
-# 5. ADMIN COMMAND HANDLERS
+# 5. USER BIN INPUT HANDLER (FOR TRIAL)
 # ----------------------------------------------------
-async def set_trial_bin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user):
-        return
-    try:
-        bin_code = context.args[0]
-        set_setting("trial_bin", bin_code)
-        await update.message.reply_text(f"✅ *Free Trial BIN set to:* `{bin_code}`", parse_mode="Markdown")
-    except Exception:
-        await update.message.reply_text("❌ *Usage:* `/settrialbin <BIN>`\n*Example:* `/settrialbin 411111`", parse_mode="Markdown")
+async def text_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    text = update.message.text.strip()
 
+    if context.user_data.get("awaiting_trial_bin"):
+        context.user_data["awaiting_trial_bin"] = False
+        
+        # Double check channel membership
+        joined = await is_user_joined(context.bot, user.id)
+        if not joined:
+            msg = (
+                f"⚠️ *MUST JOIN OUR TELEGRAM CHANNEL!*\n\n"
+                f"ফ্রি ট্রায়াল ক্লেইম করতে হলে আপনাকে অবশ্যই আমাদের চ্যানেলে জয়েন থাকতে হবে।"
+            )
+            keyboard = [
+                [InlineKeyboardButton("📢 Join Telegram Channel", url=CHANNEL_URL)],
+                [InlineKeyboardButton("🔄 Try Again", callback_data="claim_trial")]
+            ]
+            await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+            return
+
+        if has_claimed_trial(user.id):
+            msg = "❌ *TRIAL ALREADY CLAIMED!*\n\n_You have already used your 1-time Free Trial._"
+            keyboard = [[InlineKeyboardButton("🛍️ Browse Shop", callback_data="buy_menu")]]
+            await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+            return
+
+        input_bin = text.split()[0]
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT id, name FROM products WHERE bin = ?", (input_bin,))
+        prod = cursor.fetchone()
+        
+        if not prod:
+            msg = f"❌ *BIN NOT FOUND!*\n\n_স্টকে `{input_bin}` BIN-এর কোনো প্রোডাক্ট খুঁজে পাওয়া যায়নি। দয়া করে সঠিক BIN লিখুন।_"
+            keyboard = [[InlineKeyboardButton("🔄 Try Another BIN", callback_data="claim_trial")]]
+            await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+            conn.close()
+            return
+            
+        p_id, p_name = prod
+        cursor.execute("SELECT id, card_data FROM stock WHERE product_id = ? LIMIT 2", (p_id,))
+        stock_items = cursor.fetchall()
+        
+        if len(stock_items) < 2:
+            msg = f"⚠️ *NOT ENOUGH TRIAL CARDS IN STOCK!*\n\n_`{input_bin}` BIN-এ বর্তমানে ট্রায়ালের জন্য ২ টি কার্ড স্টকে নেই। অন্য BIN চেষ্টা করুন।_"
+            keyboard = [[InlineKeyboardButton("🔄 Try Another BIN", callback_data="claim_trial")]]
+            await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+            conn.close()
+            return
+            
+        card_texts = []
+        for s_id, c_data in stock_items:
+            cursor.execute("DELETE FROM stock WHERE id = ?", (s_id,))
+            card_texts.append(c_data)
+            cursor.execute("INSERT INTO history (user_id, product_name, card_data, price) VALUES (?, ?, ?, ?)",
+                           (user.id, f"FREE TRIAL ({p_name})", c_data, 0.0))
+            
+        set_claimed_trial(user.id)
+        conn.commit()
+        conn.close()
+        
+        msg = (
+            f"🎁 *━━━━━━━━━━━━━━━━━━━━*\n"
+            f"🎉 *FREE TRIAL CLAIMED SUCCESSFULLY!*\n"
+            f"🎁 *━━━━━━━━━━━━━━━━━━━━*\n\n"
+            f"📦 *Item:* `Free Trial ({p_name})`\n"
+            f"💳 *BIN:* `{input_bin}`\n\n"
+            f"🔑 *YOUR 2 FREE CARDS:*\n"
+            f"1️⃣ `{card_texts[0]}`\n"
+            f"2️⃣ `{card_texts[1]}`\n\n"
+            f"⚡ _Tap on the card details above to copy!_\n"
+            f"❤️ *Enjoy your free trial!*"
+        )
+        keyboard = [[InlineKeyboardButton("🛍️ Browse Shop", callback_data="buy_menu")]]
+        await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+# ----------------------------------------------------
+# 6. ADMIN COMMAND HANDLERS
+# ----------------------------------------------------
 async def set_bkash_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user):
         return
@@ -731,7 +756,7 @@ async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"📢 *Broadcast successfully sent to {count} users!*", parse_mode="Markdown")
 
 # ----------------------------------------------------
-# 6. MAIN FUNCTION
+# 7. MAIN FUNCTION
 # ----------------------------------------------------
 def main():
     server_thread = Thread(target=run_dummy_server, daemon=True)
@@ -747,9 +772,9 @@ def main():
     # User Handlers
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_message_handler))
 
     # Admin Handlers
-    app.add_handler(CommandHandler("settrialbin", set_trial_bin_cmd))
     app.add_handler(CommandHandler("setbkash", set_bkash_cmd))
     app.add_handler(CommandHandler("removebkash", remove_bkash_cmd))
     app.add_handler(CommandHandler("setnagad", set_nagad_cmd))
